@@ -1,0 +1,35 @@
+[package]
+name = "marlin"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "The terminal for the age of AI. Fast, customisable, opinionated."
+repository = "https://github.com/ehsangazar/marlin"
+homepage = "https://marlin.gazar.dev"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+# The terminal itself: VT parsing, the grid, scrollback, damage, and the pty.
+alacritty_terminal = "0.26"
+
+# Window, event loop, keyboard, IME.
+winit = "0.30"
+
+# GPU. Pinned exactly: glyphon declares wgpu ^30.0.0 and there is no feature in
+# a bump this project needs. Verified against the crates.io dependency list on
+# 15 Aug 2026, not assumed. See notes/Projects/Marlin/Stack.md.
+wgpu = "=30.0.0"
+
+# Glyph atlas and text rendering. Pinned exactly, same reason. Brings
+# cosmic-text 0.19, which is also what does bidi for the file viewer later.
+glyphon = "=0.12.0"
+
+anyhow = "1"
+pollster = "1.0.1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
