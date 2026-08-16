@@ -99,7 +99,7 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .trow.sel { background:var(--m-chrome); color:var(--m-fg); box-shadow:inset 2px 0 0 var(--m-acc); }
 .gd { width:.62rem; flex:0 0 auto; align-self:stretch; border-left:1px solid var(--m-line); }
 .tw { width:10px; text-align:center; flex:0 0 auto; font-size:.6rem; opacity:.75; }
-.ic { width:11px; text-align:center; flex:0 0 auto; font-size:.66rem; }
+.ic { width:15px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .trow.dir > .ic { color:var(--m-acc); }
 .trow.repo > .ic { color:var(--m-vio); }
 .ic.cfg { color:var(--m-vio); }
@@ -256,16 +256,29 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .body.h .tabbar { min-height:30px; }
 .body.v .tabbar { min-height:0; }
 
-/* File viewer: gutter plus a small highlighter. */
+/* File viewer: gutter plus highlight.js, themed through the palette so the
+   colours follow whichever theme is active rather than shipping a fixed one. */
 .vfilewrap { display:flex; align-items:flex-start; }
 .vgutter { margin:0; padding:.45rem .5rem .45rem .6rem; font-size:.72rem; line-height:1.5;
            color:var(--m-dim); opacity:.55; text-align:right; user-select:none;
            border-right:1px solid var(--m-line); white-space:pre; }
 .vfile { flex:1; }
-.hl-com { color:var(--m-dim); font-style:italic; }
-.hl-str { color:var(--m-grn); }
-.hl-num { color:var(--m-yel); }
-.hl-kw  { color:var(--m-vio); }
+.hljs-comment, .hljs-quote { color:var(--m-dim); font-style:italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag,
+.hljs-formula { color:var(--m-vio); }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute,
+.hljs-meta .hljs-string { color:var(--m-grn); }
+.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-link,
+.hljs-selector-attr, .hljs-selector-pseudo { color:var(--m-yel); }
+.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id,
+.hljs-selector-class, .hljs-title.function_ { color:var(--m-acc); }
+.hljs-attr, .hljs-variable, .hljs-template-variable, .hljs-type,
+.hljs-params, .hljs-class .hljs-title { color:var(--m-cyn); }
+.hljs-built_in, .hljs-builtin-name { color:var(--m-acc); }
+.hljs-meta, .hljs-meta .hljs-keyword { color:var(--m-dim); }
+.hljs-deletion { color:var(--m-red); }
+.hljs-emphasis { font-style:italic; }
+.hljs-strong { font-weight:600; }
 
 /* Inline prompt, because window.prompt does nothing in a Tauri webview. */
 .ask { position:fixed; inset:0; background:rgba(6,10,15,.6); display:none;
@@ -279,3 +292,31 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
                 padding:.35rem .5rem; outline:none; }
 .askbox input:focus { border-color:var(--m-acc); }
 .askhint { font-size:.6rem; color:var(--m-dim); margin-top:.4rem; opacity:.8; }
+
+/* Footer links */
+.slinks { margin-left:auto; display:flex; gap:.7rem; align-items:center; }
+.slink { background:none; border:0; color:var(--m-dim); font:inherit; font-size:.64rem;
+         cursor:pointer; padding:0; border-bottom:1px dotted transparent; }
+.slink:hover { color:var(--m-fg); border-bottom-color:currentColor; }
+.slink.sponsor { color:var(--m-grn); }
+.slink.sponsor:hover { color:var(--m-grn); }
+
+/* Editing */
+.vbadge.editing { color:var(--m-yel); }
+.vdirty { width:6px; height:6px; border-radius:50%; background:var(--m-yel); flex:0 0 auto; }
+.vtools { display:flex; gap:.3rem; margin-left:auto; }
+.vbtn { font:inherit; font-size:.6rem; letter-spacing:.04em; background:var(--m-bg);
+        color:var(--m-dim); border:1px solid var(--m-line); border-radius:4px;
+        padding:.08rem .38rem; cursor:pointer; }
+.vbtn:hover { color:var(--m-fg); border-color:var(--m-acc); }
+.vbtn.primary { background:var(--m-acc); color:#06101F; border-color:var(--m-acc); }
+.vedit { flex:1; min-width:0; background:var(--m-bg); color:var(--m-fg); border:0; outline:none;
+         resize:none; font:inherit; font-size:.72rem; line-height:1.5; padding:.45rem .6rem;
+         white-space:pre; overflow:auto; tab-size:2; }
+.vgutter { overflow:hidden; }
+.vflash { position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+          background:var(--m-chrome); border:1px solid var(--m-red); color:var(--m-fg);
+          font-size:.66rem; padding:.3rem .6rem; border-radius:5px; max-width:80%;
+          box-shadow:0 10px 24px -12px rgba(0,0,0,.8); }
+.vflash.good { border-color:var(--m-grn); }
+.viewer { position:relative; }

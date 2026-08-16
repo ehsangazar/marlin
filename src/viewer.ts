@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { canHighlight, highlight } from "./highlight";
+import { highlightTo } from "./highlight";
+import { menu } from "./menu";
 
 export type DiffMode = "unified" | "split";
 
@@ -8,11 +9,19 @@ interface DiffLine {
   s: string;
 }
 
+interface FileDoc {
+  content: string;
+  stamp: string;
+}
+
 /**
- * A read-only surface: a file preview or a diff.
+ * A file or diff surface. Reading is the default and stays highlighted; editing
+ * is an explicit mode.
  *
- * It satisfies the same shape as a terminal pane, so the layout tree does not
- * need to know which it is holding.
+ * The split is the design decision. Highlighted markup is not editable text, so
+ * highlighting *while* typing needs a real editor component (CodeMirror,
+ * Monaco) at 200KB-plus. Making editing a mode keeps reading fast and
+ * highlighted, keeps writing simple and correct, and costs one keystroke.
  */
 export class Viewer {
   readonly el: HTMLDivElement;
@@ -22,8 +31,16 @@ export class Viewer {
   private cwd: string;
   private staged: boolean;
   private body = document.createElement("div");
+  private head = document.createElement("div");
   private mode: DiffMode;
   private onMode?: (m: DiffMode) => void;
+  private onClose?: () => void;
+
+  private editing = false;
+  private dirty = false;
+  private stamp = "";
+  private original = "";
+  private area: HTMLTextAreaElement | null = null;
 
   constructor(opts: {
     kind: "file" | "diff";
@@ -42,21 +59,64 @@ export class Viewer {
     this.staged = opts.staged ?? false;
     this.mode = opts.mode ?? "unified";
     this.onMode = opts.onMode;
+    this.onClose = opts.onClose;
 
     this.el = document.createElement("div");
     this.el.className = "pane-term viewer";
+    this.head.className = "vhead";
+    this.body.className = "vbody";
+    this.el.append(this.head, this.body);
 
-    const head = document.createElement("div");
-    head.className = "vhead";
+    this.el.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      menu.show(e.clientX, e.clientY, this.menuItems());
+    });
+
+    this.renderHead();
+  }
+
+  private menuItems() {
+    if (this.kind === "diff") {
+      return [
+        { label: "Unified", run: () => this.setDiffMode("unified") },
+        { label: "Side by side", run: () => this.setDiffMode("split") },
+        { sep: true },
+        { label: "Copy Path", run: () => void navigator.clipboard.writeText(this.path) },
+        { label: "Close", key: "Esc", run: () => this.onClose?.() },
+      ];
+    }
+    return [
+      this.editing
+        ? { label: "Stop Editing", key: "⌘E", run: () => void this.setEditing(false) }
+        : { label: "Edit This File", key: "⌘E", run: () => void this.setEditing(true) },
+      { label: "Save", key: "⌘S", run: () => void this.save() },
+      { sep: true },
+      { label: "Copy Path", run: () => void navigator.clipboard.writeText(this.path) },
+      { label: "Close", key: "Esc", run: () => this.requestClose() },
+    ];
+  }
+
+  private renderHead(): void {
+    this.head.replaceChildren();
+
     const nm = document.createElement("span");
     nm.className = "vname";
-    nm.textContent = opts.name;
-    const badge = document.createElement("span");
-    badge.className = "vbadge";
-    badge.textContent = opts.kind === "diff" ? "diff" : "read-only";
-    head.append(nm, badge);
+    nm.textContent = this.name;
 
-    if (opts.kind === "diff") {
+    const badge = document.createElement("span");
+    badge.className = `vbadge${this.editing ? " editing" : ""}`;
+    badge.textContent = this.kind === "diff" ? "diff" : this.editing ? "editing" : "read-only";
+    this.head.append(nm, badge);
+
+    if (this.dirty) {
+      const d = document.createElement("span");
+      d.className = "vdirty";
+      d.title = "Unsaved changes";
+      this.head.appendChild(d);
+    }
+
+    if (this.kind === "diff") {
       const seg = document.createElement("span");
       seg.className = "vseg";
       for (const m of ["unified", "split"] as DiffMode[]) {
@@ -65,13 +125,35 @@ export class Viewer {
         b.setAttribute("aria-pressed", this.mode === m ? "true" : "false");
         b.addEventListener("click", (e) => {
           e.stopPropagation();
-          this.mode = m;
-          this.onMode?.(m);
-          void this.load();
+          this.setDiffMode(m);
         });
         seg.appendChild(b);
       }
-      head.appendChild(seg);
+      this.head.appendChild(seg);
+    } else {
+      const tools = document.createElement("span");
+      tools.className = "vtools";
+      const edit = document.createElement("button");
+      edit.className = "vbtn";
+      edit.textContent = this.editing ? "done" : "edit";
+      edit.title = this.editing ? "Stop editing (⌘E)" : "Edit this file (⌘E)";
+      edit.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void this.setEditing(!this.editing);
+      });
+      tools.appendChild(edit);
+      if (this.editing) {
+        const save = document.createElement("button");
+        save.className = "vbtn primary";
+        save.textContent = "save";
+        save.title = "Save (⌘S)";
+        save.addEventListener("click", (e) => {
+          e.stopPropagation();
+          void this.save();
+        });
+        tools.appendChild(save);
+      }
+      this.head.appendChild(tools);
     }
 
     const close = document.createElement("button");
@@ -80,19 +162,45 @@ export class Viewer {
     close.title = "Close and put the layout back (Esc)";
     close.addEventListener("click", (e) => {
       e.stopPropagation();
-      opts.onClose?.();
+      this.requestClose();
     });
-    head.appendChild(close);
+    this.head.appendChild(close);
+  }
 
-    this.body.className = "vbody";
-    this.el.append(head, this.body);
+  private setDiffMode(m: DiffMode): void {
+    this.mode = m;
+    this.onMode?.(m);
+    this.renderHead();
+    void this.load();
+  }
+
+  /** Close refuses while there are unsaved changes. Losing an edit to a stray
+   *  Escape is unforgivable, and Escape is bound to close. */
+  requestClose(): boolean {
+    if (this.dirty) {
+      this.flash("Unsaved changes. Save with ⌘S first.");
+      return false;
+    }
+    this.onClose?.();
+    return true;
+  }
+
+  get isDirty(): boolean {
+    return this.dirty;
+  }
+
+  get isEditing(): boolean {
+    return this.editing;
   }
 
   async load(): Promise<void> {
     try {
       if (this.kind === "file") {
-        const text = await invoke<string>("fs_read", { path: this.path });
-        this.renderFile(text);
+        const doc = await invoke<FileDoc>("fs_read_doc", { path: this.path });
+        this.stamp = doc.stamp;
+        this.original = doc.content;
+        this.dirty = false;
+        this.renderFile(doc.content);
       } else {
         const raw = await invoke<string>("git_diff", {
           cwd: this.cwd,
@@ -101,9 +209,50 @@ export class Viewer {
         });
         this.renderDiff(parseDiff(raw));
       }
+      this.renderHead();
     } catch (e) {
       this.body.replaceChildren(text("verr", String(e)));
     }
+  }
+
+  async setEditing(on: boolean): Promise<void> {
+    if (this.kind !== "file") return;
+    if (!on && this.dirty) {
+      this.flash("Unsaved changes. Save with ⌘S first.");
+      return;
+    }
+    this.editing = on;
+    this.renderHead();
+    this.renderFile(on ? (this.area?.value ?? this.original) : this.original);
+    if (on) this.area?.focus();
+  }
+
+  async save(): Promise<void> {
+    if (this.kind !== "file" || !this.editing) return;
+    const content = this.area?.value ?? this.original;
+    try {
+      const doc = await invoke<FileDoc>("fs_write_doc", {
+        path: this.path,
+        content,
+        expect: this.stamp,
+      });
+      this.stamp = doc.stamp;
+      this.original = doc.content;
+      this.dirty = false;
+      this.renderHead();
+      this.flash("Saved", true);
+    } catch (e) {
+      this.flash(String(e));
+    }
+  }
+
+  private flash(msg: string, good = false): void {
+    this.el.querySelector(".vflash")?.remove();
+    const d = document.createElement("div");
+    d.className = `vflash${good ? " good" : ""}`;
+    d.textContent = msg;
+    this.el.appendChild(d);
+    setTimeout(() => d.remove(), 3200);
   }
 
   private renderFile(content: string): void {
@@ -114,13 +263,45 @@ export class Viewer {
     const gutter = document.createElement("pre");
     gutter.className = "vgutter";
     gutter.textContent = lines.map((_, i) => String(i + 1)).join("\n");
+    wrap.appendChild(gutter);
 
-    const pre = document.createElement("pre");
-    pre.className = "vfile";
-    if (canHighlight(this.name)) pre.appendChild(highlight(content));
-    else pre.textContent = content;
+    if (this.editing) {
+      const area = document.createElement("textarea");
+      area.className = "vedit";
+      area.spellcheck = false;
+      area.value = content;
+      area.addEventListener("input", () => {
+        const n = area.value.split("\n").length;
+        if (n !== (gutter.textContent?.split("\n").length ?? 0)) {
+          gutter.textContent = Array.from({ length: n }, (_, i) => String(i + 1)).join("\n");
+        }
+        const nowDirty = area.value !== this.original;
+        if (nowDirty !== this.dirty) {
+          this.dirty = nowDirty;
+          this.renderHead();
+        }
+      });
+      // The terminal's key handler must not see typing meant for this box.
+      area.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+          e.preventDefault();
+          void this.save();
+        }
+        e.stopPropagation();
+      });
+      area.addEventListener("scroll", () => {
+        gutter.style.transform = `translateY(${-area.scrollTop}px)`;
+      });
+      this.area = area;
+      wrap.appendChild(area);
+    } else {
+      const pre = document.createElement("pre");
+      pre.className = "vfile hljs";
+      highlightTo(pre, content, this.name);
+      this.area = null;
+      wrap.appendChild(pre);
+    }
 
-    wrap.append(gutter, pre);
     this.body.replaceChildren(wrap);
   }
 
@@ -198,7 +379,8 @@ export class Viewer {
     /* nothing to reflow: the browser does it */
   }
   focus(): void {
-    this.el.focus();
+    if (this.editing) this.area?.focus();
+    else this.el.focus();
   }
   dispose(): void {
     this.el.remove();

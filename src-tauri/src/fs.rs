@@ -28,7 +28,9 @@ pub fn list_dir(path: &str) -> Result<Vec<Entry>> {
         if dir && SKIP.contains(&name.as_str()) && name != ".git" {
             continue;
         }
-        if name == ".git" {
+        // .git is the plumbing and .DS_Store is Finder noise. Neither is a
+        // file anyone opened a sidebar to look at.
+        if name == ".git" || name == ".DS_Store" {
             continue;
         }
         out.push(Entry {
@@ -194,4 +196,69 @@ pub fn grep(root: &str, query: &str, limit: usize) -> Vec<Hit> {
         }
     }
     out
+}
+
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
+#[derive(Serialize, Clone, Debug)]
+pub struct FileDoc {
+    pub content: String,
+    /// Cheap fingerprint of what was on disk when we read it. Not a checksum
+    /// for integrity, just enough to notice somebody else wrote the file.
+    pub stamp: String,
+}
+
+fn stamp_of(bytes: &[u8]) -> String {
+    let mut h = DefaultHasher::new();
+    bytes.hash(&mut h);
+    format!("{:x}:{}", h.finish(), bytes.len())
+}
+
+pub fn read_doc(path: &str, max_bytes: usize) -> Result<FileDoc> {
+    let bytes = std::fs::read(path)?;
+    if bytes.len() > max_bytes {
+        anyhow::bail!("file is too large to edit safely ({} KB)", bytes.len() / 1024);
+    }
+    Ok(FileDoc {
+        stamp: stamp_of(&bytes),
+        content: String::from_utf8_lossy(&bytes).to_string(),
+    })
+}
+
+/// Write only if the file still looks like what was read.
+///
+/// Without this, opening a file, leaving it, and saving an hour later silently
+/// destroys whatever happened in between. An editor that can lose someone
+/// else's work is worse than no editor.
+pub fn write_doc(path: &str, content: &str, expect: &str) -> Result<FileDoc> {
+    if let Ok(current) = std::fs::read(path) {
+        let now = stamp_of(&current);
+        if now != expect {
+            anyhow::bail!("changed on disk since it was opened, so nothing was written");
+        }
+    }
+    let bytes = content.as_bytes();
+    // Write to a sibling then rename: a crash mid-write leaves the original
+    // intact rather than a half-file.
+    let tmp = format!("{path}.marlin.tmp");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(FileDoc {
+        stamp: stamp_of(bytes),
+        content: content.to_string(),
+    })
+}
+
+/// Hand a URL to the OS browser.
+///
+/// Only http and https, and never inside the webview. Terminal output is
+/// untrusted, and a UI that can be navigated to an arbitrary page by something
+/// it printed is a whole class of problem this app does not need.
+pub fn open_url(url: &str) -> Result<()> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        anyhow::bail!("refused: only http and https are opened");
+    }
+    std::process::Command::new("open").arg(url).spawn()?;
+    Ok(())
 }

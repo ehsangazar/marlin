@@ -17,6 +17,16 @@ fn fs_read(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn fs_read_doc(path: String) -> Result<fs::FileDoc, String> {
+    fs::read_doc(&path, 4 * 1024 * 1024).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn fs_write_doc(path: String, content: String, expect: String) -> Result<fs::FileDoc, String> {
+    fs::write_doc(&path, &content, &expect).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn fs_detect(path: String) -> fs::Project {
     fs::detect(&path)
 }
@@ -44,6 +54,11 @@ fn config_save(toml: String) -> Result<(), String> {
 #[tauri::command]
 fn config_path() -> String {
     config::path().to_string_lossy().to_string()
+}
+
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    fs::open_url(&url).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -125,12 +140,15 @@ pub fn run() {
             pty_close,
             fs_list,
             fs_read,
+            fs_read_doc,
+            fs_write_doc,
             fs_detect,
             fs_walk,
             fs_grep,
             config_load,
             config_save,
             config_path,
+            open_external,
             fs_home,
             fs_display,
             git_status,

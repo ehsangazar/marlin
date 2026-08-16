@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { icon } from "./icons";
 
 export interface Entry {
   name: string;
@@ -34,8 +35,6 @@ interface Handlers {
   openDiff: (cwd: string, path: string, name: string, staged: boolean) => void;
   gitAction: (action: "stage" | "unstage" | "discard", cwd: string, path: string) => void;
 }
-
-const CFG = new Set([".claude", ".agents", "CLAUDE.md", "AGENTS.md"]);
 
 /**
  * The explorer, source control, and the workspace view for a directory that
@@ -93,9 +92,8 @@ export class Sidebar {
 
   private row(depth: number, opts: {
     twisty?: string;
-    icon: string;
+    icon: SVGElement;
     label: string;
-    iconClass?: string;
     cls?: string;
     title?: string;
     trailing?: HTMLElement[];
@@ -114,8 +112,8 @@ export class Sidebar {
     tw.className = "tw";
     tw.textContent = opts.twisty ?? "";
     const ic = document.createElement("span");
-    ic.className = `ic ${opts.iconClass ?? ""}`;
-    ic.textContent = opts.icon;
+    ic.className = "ic";
+    ic.appendChild(opts.icon);
     const nm = document.createElement("span");
     nm.className = "nm";
     nm.textContent = opts.label;
@@ -152,12 +150,10 @@ export class Sidebar {
     }
     for (const e of entries) {
       const open = this.expanded.has(e.path);
-      const cfg = CFG.has(e.name);
       into.appendChild(
         this.row(depth, {
           twisty: e.dir ? (open ? "▾" : "▸") : "",
-          icon: e.dir ? "▪" : "•",
-          iconClass: cfg ? "cfg" : e.dir ? "" : extClass(e.name),
+          icon: icon(e.name, e.dir ? "dir" : "file", open),
           label: e.name,
           cls: e.dir ? "dir" : "",
           title: e.path,
@@ -205,8 +201,7 @@ export class Sidebar {
     acts.push(st);
 
     return this.row(1, {
-      icon: "•",
-      iconClass: extClass(f.name),
+      icon: icon(f.name, "file"),
       label: f.name,
       title: f.path,
       trailing: acts,
@@ -248,8 +243,8 @@ export class Sidebar {
         for (const r of repos) {
           frag.appendChild(
             this.row(0, {
-              icon: "⑂",
-              cls: "repo dir",
+              icon: icon(r, "repo"),
+              cls: "repo",
               label: r,
               title: `${this.cwd}/${r}`,
               onClick: () => void this.setCwd(`${this.cwd}/${r}`),
@@ -321,11 +316,6 @@ export class Sidebar {
 
     this.el.replaceChildren(...Array.from(frag.children));
   }
-}
-
-function extClass(n: string): string {
-  const m = /\.([a-z0-9]+)$/i.exec(n);
-  return m?.[1] ? `ext-${m[1].toLowerCase()}` : "";
 }
 
 async function shortPath(p: string): Promise<string> {

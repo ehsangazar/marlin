@@ -482,6 +482,14 @@ function handleShortcut(e: KeyboardEvent): boolean {
     settings.open();
     return false;
   }
+  const viewer = leaves(curTab().root)
+    .map((l) => l.pane)
+    .find((p): p is Viewer => p instanceof Viewer);
+  if (viewer && (k === "e" || k === "s")) {
+    if (k === "e") void viewer.setEditing(!viewer.isEditing);
+    else void viewer.save();
+    return false;
+  }
   if (k === "f" && !e.shiftKey) {
     if (app.focused && isTerm(app.focused)) find.open(app.focused);
     return false;
@@ -553,6 +561,13 @@ function openViewer(v: Viewer): void {
 function closeViewer(): boolean {
   const tab = curTab();
   if (!tab.viewStash) return false;
+  const dirty = leaves(tab.root)
+    .map((l) => l.pane)
+    .find((p): p is Viewer => p instanceof Viewer && p.isDirty);
+  if (dirty) {
+    dirty.requestClose();
+    return true;
+  }
   for (const l of leaves(tab.root)) if (!isTerm(l.pane)) l.pane.dispose();
   tab.root = tab.viewStash;
   tab.viewStash = null;
@@ -643,6 +658,33 @@ async function boot(): Promise<void> {
 
   applyBar();
 
+  // The webview brings its own context menu. Suppressing it globally, once, is
+  // what makes every custom menu below actually appear.
+  document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  // Empty chrome still gets a menu rather than nothing at all.
+  for (const el of [els.tabbar, document.querySelector(".titlebar"), document.querySelector(".statusbar")]) {
+    el?.addEventListener("contextmenu", (e) => {
+      const ev = e as MouseEvent;
+      if ((ev.target as HTMLElement).closest(".tab")) return;
+      ev.stopPropagation();
+      menu.show(ev.clientX, ev.clientY, [
+        { label: "New Tab", key: "⌘T", run: () => void newTab() },
+        { label: "Split Vertically", key: "⌘D", run: () => void doSplit("row") },
+        { label: "Split Horizontally", key: "⌘⇧D", run: () => void doSplit("col") },
+        { sep: true },
+        { head: "Tab bar" },
+        { label: "Top", run: () => setBar("h") },
+        { label: "Side", run: () => setBar("v") },
+        { label: "Hidden", run: () => setBar("hidden") },
+        { sep: true },
+        { label: "Toggle File Tree", key: "⌘B", run: toggleTree },
+        { label: "Next Theme", run: nextTheme },
+        { label: "Settings…", key: "⌘,", run: () => settings.open() },
+      ]);
+    });
+  }
+
   // Double-click the empty run of the tab bar for a new tab, the way every
   // browser does. The check matters: without it, a double-click that lands on a
   // tab opens a tab as well as selecting one.
@@ -713,6 +755,23 @@ async function boot(): Promise<void> {
     { label: "Close Other Tabs", run: () => closeOthers(app.active) },
   ];
   palette.setCommands(commands);
+
+  // Footer links. Opened through the OS handler, never in the webview: a
+  // terminal that can navigate its own UI to an arbitrary page is a terminal
+  // with a whole class of problem it did not need.
+  const REPO = "https://github.com/ehsangazar/marlin";
+  const openExternal = (url: string) => {
+    void invoke("open_external", { url }).catch(() => {});
+  };
+  document.getElementById("lnk-bug")?.addEventListener("click", () =>
+    openExternal(`${REPO}/issues/new?labels=bug&template=`),
+  );
+  document.getElementById("lnk-idea")?.addEventListener("click", () =>
+    openExternal(`${REPO}/issues/new?labels=enhancement&template=`),
+  );
+  document.getElementById("lnk-sponsor")?.addEventListener("click", () =>
+    openExternal("https://github.com/sponsors/ehsangazar"),
+  );
 
   find = new Find();
   settings = new Settings(cfg, (next) => applyConfig(next));
