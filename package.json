@@ -1,0 +1,26 @@
+{
+  "name": "marlin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A terminal built for running coding agents",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "start": "tauri dev",
+    "bundle": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  }
+}

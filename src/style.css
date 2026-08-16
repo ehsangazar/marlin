@@ -1,0 +1,33 @@
+:root {
+  --m-bg:#0A0F16; --m-bar:#0D131C; --m-chrome:#101823; --m-line:#1C2734;
+  --m-fg:#C6D3E1; --m-dim:#5C6E82; --m-acc:#4C8DFF; --m-vio:#8B7BFF;
+  --m-grn:#5FD3A0; --m-yel:#E8B44C; --m-red:#FF7A7A; --m-cyn:#4FD1E0;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin:0; height:100%; overflow:hidden; background:var(--m-bg); }
+body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: antialiased; }
+
+.win { display:flex; flex-direction:column; height:100%; }
+
+.titlebar {
+  display:flex; align-items:center; gap:.5rem; flex:0 0 34px;
+  background:var(--m-chrome); border-bottom:1px solid var(--m-line);
+  padding-left:78px; /* clear of the macOS traffic lights */
+  user-select:none;
+}
+.titlebar .name { color:var(--m-dim); font-size:.72rem; letter-spacing:.04em; }
+
+.body { flex:1; display:flex; min-height:0; }
+.panes { flex:1; display:flex; min-width:0; min-height:0; background:var(--m-line); gap:1px; padding:1px; }
+.pane-term { flex:1; min-width:0; min-height:0; background:var(--m-bg); padding:6px 8px; overflow:hidden; }
+.pane-term .xterm { height:100%; }
+.pane-term .xterm-viewport::-webkit-scrollbar { width:8px; }
+.pane-term .xterm-viewport::-webkit-scrollbar-thumb { background:var(--m-line); border-radius:4px; }
+
+.statusbar {
+  display:flex; gap:1.1rem; flex:0 0 24px; align-items:center;
+  padding:0 .8rem; background:var(--m-chrome); border-top:1px solid var(--m-line);
+  font-size:.66rem; color:var(--m-dim); letter-spacing:.03em;
+}
+.statusbar b { color:var(--m-fg); font-weight:600; }

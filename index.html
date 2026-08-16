@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-mode="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>marlin</title>
+  </head>
+  <body>
+    <div class="win">
+      <div class="titlebar" data-tauri-drag-region>
+        <span class="traffic"></span>
+        <span class="name" id="wintitle">marlin</span>
+      </div>
+      <div class="body">
+        <div class="panes" id="panes"></div>
+      </div>
+      <div class="statusbar">
+        <span>panes <b id="st-panes">0</b></span>
+        <span>shell <b id="st-shell">—</b></span>
+        <span>theme <b id="st-theme">—</b></span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

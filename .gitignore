@@ -1,4 +1,7 @@
 /target
+/dist
+/node_modules
+/src-tauri/target
 **/*.rs.bk
 .DS_Store
 .build-done
