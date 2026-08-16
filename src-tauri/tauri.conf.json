@@ -35,6 +35,10 @@
     "category": "DeveloperTool",
     "shortDescription": "A terminal built for running coding agents",
     "copyright": "MIT",
+    "macOS": {
+      "entitlements": "entitlements.plist",
+      "minimumSystemVersion": "10.15"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

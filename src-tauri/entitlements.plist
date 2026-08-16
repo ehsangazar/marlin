@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hardened runtime exceptions, and only the ones that are load-bearing.
+
+  Notarization requires the hardened runtime, which switches off things a
+  WKWebView needs by default. Every entry here is an exception to that, so each
+  one widens what can run inside Marlin's process: the list stays short on
+  purpose.
+
+  JIT and unsigned executable memory are JavaScriptCore's, not ours. The webview
+  compiles the frontend at runtime and cannot work without them.
+
+  Notably absent: the app is not sandboxed. A terminal whose whole job is to run
+  the programs you tell it to cannot be, and Developer ID distribution outside
+  the App Store does not ask for it.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+</dict>
+</plist>

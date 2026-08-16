@@ -34,13 +34,9 @@
   .top nav a{color:var(--dim);text-decoration:none}
   .top nav a:hover{color:var(--fg)}
 
-  header{padding-block:clamp(2.6rem,6vw,4.5rem) clamp(1.5rem,3vw,2rem)}
-  .shot{margin-top:clamp(1.8rem,4vw,2.8rem);border:1px solid var(--line);border-radius:12px;
-        overflow:hidden;background:var(--chrome);box-shadow:0 30px 70px -40px rgba(0,0,0,.95)}
-  .shot img{display:block;width:100%;height:auto}
-  .shotcap{display:flex;gap:.6rem;flex-wrap:wrap;align-items:baseline;
-           font-family:var(--mono);font-size:.72rem;color:var(--dim);margin-top:.7rem}
-  .shotcap b{color:var(--fg);font-weight:600}
+  /* .wrap sets `padding:0 …`, so anything that also carries .wrap needs its block
+     padding at class specificity or the shorthand wins and flattens it to zero. */
+  header.wrap{padding-block:clamp(2.6rem,6vw,4.5rem) clamp(1.5rem,3vw,2rem)}
   .eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.16em;text-transform:uppercase;
            color:var(--dim);display:flex;align-items:center;gap:.7rem}
   .eyebrow::after{content:"";height:1px;flex:1;background:var(--line)}
@@ -60,7 +56,7 @@
   .btn:hover{border-color:var(--acc)}
   .btn.primary{background:var(--acc);border-color:var(--acc);color:#06101F;font-weight:600}
 
-  section{padding-block:clamp(3.4rem,7.5vw,6rem);border-top:1px solid var(--line)}
+  section{border-top:1px solid var(--line)}
   .head{display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
   .head h2{font-size:clamp(1.35rem,3.4vw,1.9rem);letter-spacing:-.02em}
   .head .note{font-family:var(--mono);font-size:.74rem;color:var(--dim);
@@ -99,8 +95,9 @@
   footer .wrap{display:flex;gap:1rem;justify-content:space-between;flex-wrap:wrap}
   footer a{color:var(--dim)}
   /* Spacing: give each block room to be its own thing. A section that only has
-     one padding value ends up with its heading crowding what it introduces. */
-  section{padding-block:clamp(4.2rem,8vw,7rem)}
+     one padding value ends up with its heading crowding what it introduces.
+     Matched on section.wrap so it outranks .wrap's padding shorthand. */
+  section.wrap{padding-block:clamp(4.2rem,8vw,7rem)}
   .head{margin-bottom:1.8rem}
   .head+p{margin-bottom:1.4rem}
   section>p+p{margin-top:-.35rem}
@@ -268,7 +265,6 @@
   <span class="mark">Marlin</span>
   <nav>
     <a href="#what">What it does</a>
-    <a href="#proof">Screenshot</a>
     <a href="#security">Security</a>
     <a href="#install">Install</a>
     <a href="#gaps">Not done yet</a>
@@ -361,19 +357,6 @@
     <div class="cell"><span class="k">Agents</span><h3>Status you can see</h3>
       <p>A dot per pane and per tab, driven by real shell marks rather than guesswork: running,
       finished, failed. A dot appears only when a pane knows something you do not.</p></div>
-  </div>
-</section>
-
-<section id="proof" class="wrap">
-  <div class="head"><h2>And here it is actually running</h2><span class="note">Not a render</span></div>
-  <p>Marlin running Claude Code in a real repository with nine repos in the sidebar, which is what it
-  was built for. Every competitor's hero is a mockup; this one is a screenshot.</p>
-  <figure class="shot" style="margin-bottom:0">
-    <img src="/marlin.png" width="1800" height="1211" alt="Marlin running Claude Code, with the repository sidebar showing nine repositories and the explorer beneath it">
-  </figure>
-  <div class="shotcap">
-    <b>Not a mockup.</b>
-    <span>Marlin running Claude Code in a real repository, which is what it was built for.</span>
   </div>
 </section>
 
