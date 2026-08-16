@@ -320,3 +320,13 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
           box-shadow:0 10px 24px -12px rgba(0,0,0,.8); }
 .vflash.good { border-color:var(--m-grn); }
 .viewer { position:relative; }
+
+/* Wordmark: the M carries the identity, "arlin" recedes. Same relationship as
+   the icon, which is the M alone because a fish is unreadable at 16px. */
+.brand { display:inline-flex; align-items:baseline; user-select:none; }
+.brand b { font-size:.98rem; font-weight:700; letter-spacing:-.03em; color:var(--m-acc); line-height:1; }
+.brand i { font-style:normal; font-size:.72rem; font-weight:500; letter-spacing:.02em;
+           color:var(--m-dim); line-height:1; }
+.titlebar .name { color:var(--m-dim); font-size:.72rem; letter-spacing:.03em;
+                  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:52%; }
+.titlebar .name:not(:empty)::before { content:"·"; margin:0 .45rem; opacity:.6; }

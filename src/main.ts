@@ -106,7 +106,7 @@ function tabLabel(t: Tab): string {
 }
 
 function refreshChrome(): void {
-  els.title.textContent = app.focused ? `marlin · ${app.focused.name}` : "marlin";
+  els.title.textContent = app.focused?.name ?? "";
   els.stTheme.textContent = app.theme.name;
   els.stTabs.textContent = String(app.tabs.length);
   els.stBar.textContent =

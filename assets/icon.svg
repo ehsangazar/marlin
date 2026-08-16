@@ -1,42 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#101A28"/>
+      <stop offset="0" stop-color="#121D2C"/>
       <stop offset="1" stop-color="#070B11"/>
     </linearGradient>
-    <linearGradient id="fish" x1="0" y1="0" x2="1" y2="0">
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#8B7BFF"/>
-      <stop offset="0.55" stop-color="#4C8DFF"/>
+      <stop offset="0.5" stop-color="#4C8DFF"/>
       <stop offset="1" stop-color="#4FD1E0"/>
     </linearGradient>
   </defs>
 
   <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
 
-  <g fill="url(#fish)">
-    <!-- dorsal sail: the marlin's most recognisable feature, so it carries the mark -->
-    <path d="M392 512
-             C 404 356, 470 258, 606 214
-             C 566 300, 528 400, 512 500
-             Z"/>
-
-    <!-- body -->
-    <path d="M232 596
-             C 330 508, 470 490, 604 520
-             C 690 540, 762 558, 828 570
-             C 762 606, 682 630, 604 640
-             C 468 656, 320 654, 232 596
-             Z"/>
-
-    <!-- bill -->
-    <path d="M812 560 L 984 552 L 984 586 L 812 590 Z"/>
-
-    <!-- tail -->
-    <path d="M236 598 L 118 500 L 158 600 L 118 700 Z"/>
-
-    <!-- pectoral fin -->
-    <path d="M446 636 C 470 692, 512 726, 566 740 C 512 744, 452 716, 420 664 Z"/>
-  </g>
-
-  <circle cx="756" cy="574" r="15" fill="#070B11"/>
+  <!-- A geometric M. The centre vertex is dropped low and sharpened so the
+       counter reads as a dorsal fin rather than a plain letterform. -->
+  <path fill="url(#ink)" d="
+    M 268 762
+    L 268 262
+    L 386 262
+    L 512 512
+    L 638 262
+    L 756 262
+    L 756 762
+    L 654 762
+    L 654 448
+    L 552 650
+    L 472 650
+    L 370 448
+    L 370 762
+    Z"/>
 </svg>
