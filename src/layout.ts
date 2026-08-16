@@ -1,4 +1,14 @@
-import type { Pane } from "./pane";
+/**
+ * The tree holds surfaces, not terminals specifically: a leaf can be a pane or
+ * a read-only viewer, and the layout does not need to know which.
+ */
+export interface Surface {
+  readonly el: HTMLElement;
+  name: string;
+  resize(): void;
+  dispose(): void;
+  focus(): void;
+}
 
 /**
  * A tab holds a tree, not a row.
@@ -7,7 +17,7 @@ import type { Pane } from "./pane";
  * new sibling, which is why a vertical split inside a horizontal one falls out
  * of pressing the second key rather than needing a special case.
  */
-export type Leaf = { pane: Pane };
+export type Leaf = { pane: Surface };
 export type Split = { dir: "row" | "col"; a: Node; b: Node; ratio?: [number, number] };
 export type Node = Leaf | Split;
 
@@ -15,7 +25,7 @@ export function isLeaf(n: Node): n is Leaf {
   return (n as Leaf).pane !== undefined;
 }
 
-export function leaf(pane: Pane): Leaf {
+export function leaf(pane: Surface): Leaf {
   return { pane };
 }
 
@@ -55,7 +65,7 @@ export function removeNode(root: Node, target: Node): Node | null {
   return root;
 }
 
-export function findLeaf(root: Node, pane: Pane): Leaf | null {
+export function findLeaf(root: Node, pane: Surface): Leaf | null {
   for (const l of leaves(root)) if (l.pane === pane) return l;
   return null;
 }
@@ -77,7 +87,7 @@ export interface Tab {
  * holds the scrollback and the pty binding, so recreating one on every layout
  * change would wipe the terminal.
  */
-export function renderTree(n: Node, focused: Pane | null): HTMLElement {
+export function renderTree(n: Node, focused: Surface | null): HTMLElement {
   if (isLeaf(n)) {
     n.pane.el.classList.toggle("focus", n.pane === focused);
     return n.pane.el;

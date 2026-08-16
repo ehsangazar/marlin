@@ -13,8 +13,10 @@ import {
   split,
   type Tab,
 } from "./layout";
+import type { Surface } from "./layout";
 import { THEMES, applyTheme, type MarlinTheme } from "./theme";
 import { Sidebar } from "./sidebar";
+import { Viewer, type DiffMode } from "./viewer";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
@@ -28,9 +30,10 @@ const app = {
   theme: THEMES[0] as MarlinTheme,
   tabs: [] as Tab[],
   active: 0,
-  focused: null as Pane | null,
+  focused: null as Surface | null,
   bar: "h" as BarState,
   tree: true,
+  diffMode: "unified" as DiffMode,
 };
 
 const els = {
@@ -50,7 +53,10 @@ const els = {
 let sidebar: Sidebar;
 
 const curTab = (): Tab => app.tabs[app.active] as Tab;
-const allPanes = (): Pane[] => app.tabs.flatMap((t) => leaves(t.root).map((l) => l.pane));
+/** Terminal panes only. A viewer has no pty and no theme of its own. */
+const isTerm = (s: Surface): s is Pane => "ptyId" in s;
+const allSurfaces = (): Surface[] => app.tabs.flatMap((t) => leaves(t.root).map((l) => l.pane));
+const allPanes = (): Pane[] => allSurfaces().filter(isTerm);
 
 function paneByPty(id: number): Pane | undefined {
   return allPanes().find((p) => p.ptyId === id);
@@ -139,11 +145,11 @@ function render(): void {
   refreshChrome();
 }
 
-function focusPane(p: Pane): void {
+function focusPane(p: Surface): void {
   app.focused = p;
   for (const l of leaves(curTab().root)) l.pane.el.classList.toggle("focus", l.pane === p);
   p.focus();
-  if (p.cwd) void sidebar.setCwd(p.cwd);
+  if (isTerm(p) && p.cwd) void sidebar.setCwd(p.cwd);
   refreshChrome();
 }
 
@@ -233,7 +239,14 @@ function closeTab(i: number): void {
  * taken before it reaches the shell.
  */
 function handleShortcut(e: KeyboardEvent): boolean {
-  if (e.type !== "keydown" || !e.metaKey) return true;
+  if (e.type !== "keydown") return true;
+
+  // Escape only belongs to Marlin while a viewer has taken the tab over.
+  // Otherwise it is the shell's, and stealing it would break vi for everyone.
+  if (e.key === "Escape" && !e.metaKey) {
+    return !closeViewer();
+  }
+  if (!e.metaKey) return true;
   const k = e.key.toLowerCase();
 
   // Terminal actions use iTerm2's bindings, file actions will use VSCode's.
@@ -267,6 +280,43 @@ function handleShortcut(e: KeyboardEvent): boolean {
     selectTab(Number(k) - 1);
     return false;
   }
+  return true;
+}
+
+/**
+ * Opening a file or a diff rearranges the tab rather than adding to it.
+ *
+ * Three columns, left to right: the tree, the file, then the terminal. The file
+ * lands beside the tree it was clicked in so the eye travels the way the hand
+ * just did, and the terminal keeps a fixed right edge instead of jumping across
+ * the window every time something is opened. Escape restores the exact layout.
+ */
+function openViewer(v: Viewer): void {
+  const tab = curTab();
+  const term = leaves(tab.root)
+    .map((l) => l.pane)
+    .find((p): p is Pane => isTerm(p));
+  if (!term) return;
+
+  if (!tab.viewStash) tab.viewStash = tab.root;
+  const root = split("row", leaf(v), leaf(term));
+  root.ratio = [1.7, 1];
+  tab.root = root;
+  app.focused = term;
+  render();
+  void v.load();
+}
+
+function closeViewer(): boolean {
+  const tab = curTab();
+  if (!tab.viewStash) return false;
+  for (const l of leaves(tab.root)) if (!isTerm(l.pane)) l.pane.dispose();
+  tab.root = tab.viewStash;
+  tab.viewStash = null;
+  const first = leaves(tab.root)[0];
+  if (first) app.focused = first.pane;
+  render();
+  if (app.focused) focusPane(app.focused);
   return true;
 }
 
@@ -307,8 +357,23 @@ async function boot(): Promise<void> {
   document.getElementById("btn-tree")?.addEventListener("click", toggleTree);
 
   sidebar = new Sidebar(els.tree, {
-    openFile: (path, name) => console.log("open", name, path),
-    openDiff: (cwd, path, name) => console.log("diff", name, path, cwd),
+    openFile: (path, name) =>
+      openViewer(
+        new Viewer({ kind: "file", name, path, onClose: () => closeViewer() }),
+      ),
+    openDiff: (cwd, path, name, staged) =>
+      openViewer(
+        new Viewer({
+          kind: "diff",
+          name,
+          path,
+          cwd,
+          staged,
+          mode: app.diffMode,
+          onMode: (m) => (app.diffMode = m),
+          onClose: () => closeViewer(),
+        }),
+      ),
     gitAction: async (action, cwd, path) => {
       const cmd = action === "stage" ? "git_stage" : action === "unstage" ? "git_unstage" : "git_discard";
       try {
