@@ -1,0 +1,48 @@
+name: Feature request
+description: Something Marlin should do that it does not
+labels: ["feature request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Marlin's feature list is short on purpose.** Splits, tabs that sit
+        horizontally or vertically, renaming, and status a coding agent can be
+        judged by. Everything else has to argue against the frame budget, so the
+        most useful thing you can write here is not the feature, it is the
+        problem underneath it.
+
+        A "no" here is not a dismissal. It is the reason the terminal is fast.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do that Marlin makes hard?
+      description: The situation, not the solution. This is the part that decides the answer.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you think should happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: prior
+    attributes:
+      label: Who already does this, and how
+      description: |
+        kitty, Ghostty, WezTerm, Alacritty, iTerm2, Windows Terminal. Naming a
+        working implementation is the strongest form this request can take.
+
+  - type: dropdown
+    id: workaround
+    attributes:
+      label: Is there a workaround today?
+      options:
+        - "No, this blocks me"
+        - "Yes, but it is painful"
+        - "Yes, this is a convenience"
+    validations:
+      required: true

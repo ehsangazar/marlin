@@ -1,5 +1,10 @@
 // Generate site/version.json from package.json and the changelog, so the feed
 // cannot drift from the release it claims to describe.
+//
+// The feed carries one entry per platform, not one disk image. It used to carry
+// a single `dmg` pointing at an aarch64 build, which meant an Intel Mac was
+// offered an Apple Silicon app and a Windows machine was offered a disk image.
+// `downloads` is keyed the way update.rs keys it: `<os>-<arch>`.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
@@ -22,21 +27,37 @@ const notes = bullets
   .map((b) => b.replace(/\*\*/g, ""))
   .join("\n");
 
+const v = pkg.version;
+const rel = `https://github.com/ehsangazar/marlin/releases/download/v${v}`;
+
+// The names Tauri gives the bundles. scripts/publish.sh checks every one of
+// these against the actual release before the feed goes up, because a name
+// invented here and never verified is how the update button starts downloading
+// a 404.
+const macos = `${rel}/Marlin_${v}_universal.dmg`;
+const downloads = {
+  "macos-aarch64": macos,
+  "macos-x86_64": macos,
+  "windows-x86_64": `${rel}/Marlin_${v}_x64-setup.exe`,
+};
+
 writeFileSync(
   "site/version.json",
   JSON.stringify(
     {
-      version: pkg.version,
+      version: v,
       published: new Date().toISOString().slice(0, 10),
-      url: `https://github.com/ehsangazar/marlin/releases/tag/v${pkg.version}`,
-      // The name Tauri gives the bundle, so the in-app updater has something to
-      // download rather than a page to send you to. Upload the dmg under
-      // exactly this name or the button degrades to a link.
-      dmg: `https://github.com/ehsangazar/marlin/releases/download/v${pkg.version}/Marlin_${pkg.version}_aarch64.dmg`,
+      url: `https://github.com/ehsangazar/marlin/releases/tag/v${v}`,
+      // Kept, and kept pointing at macOS, because copies of Marlin already
+      // installed read this field and know nothing about `downloads`. Dropping
+      // it would silently stop updating every 0.1.x in the wild.
+      dmg: macos,
+      downloads,
       notes: notes || "See the changelog.",
     },
     null,
     2,
   ) + "\n",
 );
-console.log("site/version.json ->", pkg.version);
+console.log("site/version.json ->", v);
+for (const [k, u] of Object.entries(downloads)) console.log(`  ${k.padEnd(15)} ${u.split("/").pop()}`);

@@ -1,0 +1,64 @@
+name: Bug report
+description: Something behaves differently from how it reads
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Marlin is unsigned and Linux and Windows are lightly tested, so before
+        filing: a macOS "Apple could not verify this app" warning and a Windows
+        SmartScreen warning are both known and are covered in the README.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: The shortest sequence that shows it. "Sometimes" is a useful answer if it is the true one.
+      placeholder: |
+        1. Open a pane in a git repository
+        2. Split vertically
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Marlin version
+      description: Settings shows it, or `Marlin.app/Contents/Info.plist`. Say "built from source" and the commit if so.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: shell
+    attributes:
+      label: Shell, and whether the shell integration is installed
+      placeholder: zsh, integration installed
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: |
+        Logs, a screenshot, the terminal you are comparing against. **Check that
+        nothing here is a token, a key or your employer's source**. A terminal
+        screenshot carries more than people expect.

@@ -1,0 +1,275 @@
+# Build the installers on machines that are not Gaz's, and attach them to the tag.
+#
+# Before this existed a release was one `tauri build` on one Apple Silicon Mac,
+# so the only artefact Marlin had ever shipped was `Marlin_x.y.z_aarch64.dmg`.
+# That is not "macOS": it excludes every Intel Mac. And there was no Windows
+# build at all, in a repository whose README claims the stack is cross-platform.
+#
+# What this produces, per tag:
+#   macOS    one universal disk image, Apple Silicon and Intel in one file
+#   Windows  an NSIS installer and an MSI, x64
+#
+# Deliberately NOT here: publishing site/version.json. That file is the update
+# feed every installed copy polls, it lives on the Hetzner box, and putting a
+# root SSH key for a server that also runs production into the secrets of a
+# PUBLIC repository is not a trade worth making for one scp. scripts/publish.sh
+# does that step from Gaz's machine, after this workflow has put the installers
+# somewhere real. Order matters: a feed pointing at a release that has no
+# artefacts tells every running copy to download a 404.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # A rerun path that does not need a new tag: the build can fail on something
+  # that has nothing to do with the code, and re-tagging to retry is how tags
+  # stop meaning anything.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "An existing tag to build, e.g. v0.1.2"
+        required: true
+      dry_run:
+        description: "Build and list the installers, upload nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+jobs:
+  # One job creates the release, as a draft, before anything uploads. Three
+  # matrix jobs racing to `gh release create` is two failures and a coin toss.
+  draft:
+    name: Draft the release
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.dry_run != 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # One source for what changed. The release body is the changelog section
+      # for this version, never a second description that drifts from it.
+      - name: Create the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V="${TAG#v}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists, reusing it"
+            exit 0
+          fi
+          NOTES="$(awk -v v="## \\[$V\\]" 'BEGIN{p=0} $0 ~ v {p=1; next} /^## \[/ && p {exit} p' CHANGELOG.md)"
+          [ -n "$NOTES" ] || NOTES="See CHANGELOG.md."
+          gh release create "$TAG" --draft --title "Marlin $TAG" --notes "$NOTES"
+
+  bundle:
+    name: ${{ matrix.name }}
+    needs: draft
+    # `always()` so a dry run, which skips the draft job, still builds.
+    if: ${{ always() && needs.draft.result != 'failure' }}
+    strategy:
+      # One platform failing should still leave the other's installer attached,
+      # so the release can be salvaged by rerunning a single job.
+      fail-fast: false
+      matrix:
+        include:
+          # Universal, not aarch64. An Intel Mac is still a Mac, and a second
+          # dmg is a second thing to pick wrong on the download page.
+          - name: macOS (universal)
+            os: macos-14
+            target: universal-apple-darwin
+            rust_targets: aarch64-apple-darwin x86_64-apple-darwin
+            glob: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          - name: Windows (x64)
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            rust_targets: x86_64-pc-windows-msvc
+            glob: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/{nsis/*.exe,msi/*.msi}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Add the build targets
+        run: rustup target add ${{ matrix.rust_targets }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # The same gates ci.yml runs, because a tag is the one build where a
+      # warning is expensive. No `cargo fmt --check`: this codebase lays out
+      # several tables and chains by hand and rustfmt disagrees, so the gate's
+      # only fix would be to undo the readable version.
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --target ${{ matrix.target == 'universal-apple-darwin' && 'aarch64-apple-darwin' || matrix.target }} -- -D warnings
+      - name: Test
+        working-directory: src-tauri
+        run: cargo test --all
+
+      # Unsigned, and the workflow says so rather than letting it be discovered
+      # at the far end. There is no Apple Developer ID and no Windows signing
+      # certificate, so macOS shows "Apple could not verify this app" and
+      # Windows shows SmartScreen. Both are covered in the README. When the
+      # certificates exist, they plug in here as secrets and nothing else in
+      # this file changes.
+      - name: Build the installers
+        run: pnpm tauri build --target ${{ matrix.target }}
+
+      - name: Upload them to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob globstar braceexpand
+          files=(${{ matrix.glob }})
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::no installers matched ${{ matrix.glob }}: the bundler produced nothing"
+            find src-tauri/target -name 'bundle' -type d -print 2>/dev/null || true
+            exit 1
+          fi
+          # The names matter as much as the files: scripts/version-json.mjs
+          # writes these into the update feed, and publish.sh refuses to ship a
+          # feed naming an artefact the release does not have. A dry run exists
+          # to compare the two lists before a tag depends on them.
+          for f in "${files[@]}"; do
+            echo "  $(basename "$f")  $(du -h "$f" | cut -f1)"
+            echo "- \`$(basename "$f")\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "dry run: built ${#files[@]} installer(s), uploading none"
+            exit 0
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber
+
+  # Does the Windows build actually install and start?
+  #
+  # This job exists because of a real deadlock: the honest line in the README is
+  # "Windows is built, not exercised", nobody has a Windows machine to exercise
+  # it on, and "somebody ran it once" was the gate on announcing the project
+  # anywhere that Windows users read. Compiling is not the same as running:
+  # WebView2 could be missing, ConPTY could fail, the installer could put the
+  # exe somewhere else. So the runner does it.
+  #
+  # What this can and cannot prove, stated plainly so nobody quotes it as more
+  # than it is. It CAN prove: the NSIS installer completes unattended, the
+  # executable lands where the installer says, the process starts and does not
+  # exit on its own. It CANNOT prove anything a person would notice: whether the
+  # window renders, whether a prompt appears, whether typing works.
+  smoke:
+    name: Windows smoke test
+    needs: bundle
+    if: ${{ always() && needs.bundle.result == 'success' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # Rebuilt rather than downloaded from the release, so a dry run can smoke
+      # test too, and so this never depends on an upload having happened.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: x86_64-pc-windows-msvc
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --target x86_64-pc-windows-msvc
+
+      # The deterministic half. This gates: if the installer does not produce a
+      # runnable exe, the Windows download on the site is a lie.
+      - name: Install it, silently
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $setup = Get-ChildItem -Recurse -Filter "*-setup.exe" `
+            -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis | Select-Object -First 1
+          if (-not $setup) { throw "no NSIS installer was produced" }
+          Write-Host "installer: $($setup.Name)"
+          # /S is NSIS silent. installMode is currentUser, so no elevation.
+          Start-Process -FilePath $setup.FullName -ArgumentList "/S" -Wait
+
+          # Found, not assumed. The executable is named after mainBinaryName
+          # ("marlin") while the install directory comes from productName
+          # ("Marlin"), and Tauri has changed which of those wins before. NTFS
+          # is case-insensitive so the case does not matter, but the directory
+          # might, and a smoke test that fails because it guessed a path is
+          # worse than no smoke test.
+          $exe = Get-ChildItem -Recurse -Filter "marlin.exe" -Path "$env:LOCALAPPDATA\Programs" `
+            -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) {
+            Write-Host "nothing installed under $env:LOCALAPPDATA\Programs. What is there:"
+            Get-ChildItem -Recurse -Depth 2 -Path "$env:LOCALAPPDATA\Programs" -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "  $($_.FullName)" }
+            throw "the installer ran but produced no marlin.exe"
+          }
+          Write-Host "installed: $($exe.FullName)"
+          "MARLIN_EXE=$($exe.FullName)" >> $env:GITHUB_ENV
+          "- Windows installer completed and produced ``$($exe.Name)``" >> $env:GITHUB_STEP_SUMMARY
+
+      # The reporting half. Deliberately does NOT gate the release: a GUI
+      # process on a runner with no interactive desktop is exactly the kind of
+      # thing that fails for reasons that have nothing to do with the app, and a
+      # release blocked by a flaky window is worse than a release that says it
+      # is unverified. Read the result, do not automate on it.
+      - name: Start it, and see whether it stays up
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "$env:MARLIN_EXE" -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) {
+            "- Marlin.exe started then exited with $($p.ExitCode) within 20s" >> $env:GITHUB_STEP_SUMMARY
+            throw "it did not stay running"
+          }
+          Stop-Process -Id $p.Id -Force
+          "- Marlin.exe started and was still running after 20s" >> $env:GITHUB_STEP_SUMMARY
+
+  # Undraft only once every platform has attached something. A half-populated
+  # release that is already public is the one state the update feed must never
+  # be pointed at.
+  publish:
+    name: Publish the release
+    needs: bundle
+    if: ${{ github.event.inputs.dry_run != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Undraft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --draft=false --latest
+          echo "### $TAG is live" >> "$GITHUB_STEP_SUMMARY"
+          gh release view "$TAG" --json assets --jq '.assets[].name' >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "Now run \`scripts/publish.sh\` locally to point the update feed at it." >> "$GITHUB_STEP_SUMMARY"

@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
-# Build the release, put it on GitHub, then point the update feed at it.
+# Point the update feed at a release that CI has already built.
 #
-# Order matters and is the whole reason this is a script. release.sh regenerates
-# site/version.json at tag time, but that file names a disk image that does not
-# exist yet. Deploying it then would tell every running copy of Marlin to
-# download a 404. So: build, upload, and only then publish the feed.
+# This used to run `tauri build` on whatever machine you happened to be sitting
+# at, which is why every release Marlin had ever shipped was one Apple Silicon
+# disk image: no Intel Mac build, no Windows build, and no way to make one
+# without owning the hardware. Building moved to .github/workflows/release.yml.
+# What is left here is the step that cannot move, because it needs an SSH key
+# for a server that also runs production and this is a public repository.
 #
-# Run scripts/release.sh <version> first. This picks up whatever it tagged.
+# The order is the whole point. site/version.json is the feed every installed
+# copy of Marlin polls once a day. Publishing it before the installers are
+# downloadable tells every running copy to fetch a 404, so this refuses to
+# publish until it has checked each URL in the feed against the actual release.
+#
+#   scripts/release.sh 0.1.2     bump, changelog, commit, tag, regenerate the feed
+#   git push && git push --tags  CI builds macOS and Windows, attaches them
+#   scripts/publish.sh           verify, then publish the feed
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,62 +23,67 @@ cd "$ROOT"
 
 V="$(node -p "require('./package.json').version")"
 TAG="v$V"
-DMG="src-tauri/target/release/bundle/dmg/Marlin_${V}_aarch64.dmg"
 HOST="root@178.105.103.56"
 KEY="$HOME/.ssh/id_ed25519_hetzner"
 
-git rev-parse "$TAG" >/dev/null 2>&1 || { echo "no tag $TAG — run scripts/release.sh $V first"; exit 1; }
+git rev-parse "$TAG" >/dev/null 2>&1 || { echo "no tag $TAG: run scripts/release.sh $V first"; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "working tree is dirty"; exit 1; }
 
-# Signing and notarising. Without these four values the build still succeeds,
-# ad-hoc signed, and anyone who is not you gets "Apple could not verify this
-# app" — so the build says which case it is running rather than finding out at
-# the far end. The credentials live in 1Password, read once into the
-# environment, because the desktop app relocks between calls.
-if op item get "Apple Developer ID" --vault "Dev & Infra" >/dev/null 2>&1; then
-  APPLE="$(op item get "Apple Developer ID" --vault "Dev & Infra" --fields label=notesPlain --reveal)"
-  field() { printf '%s' "$APPLE" | grep "^$1:" | sed "s/^$1: //; s/\"$//"; }
-  export APPLE_SIGNING_IDENTITY="$(field 'Signing identity')"
-  export APPLE_ID="$(field 'Apple ID')"
-  export APPLE_PASSWORD="$(field 'App-specific password')"
-  export APPLE_TEAM_ID="$(field 'Team ID')"
-  unset APPLE
-  echo "==> signing as $APPLE_SIGNING_IDENTITY, notarising as $APPLE_ID"
-else
-  echo "!! no 'Apple Developer ID' item in 1Password: this build will be ad-hoc"
-  echo "!! signed and Gatekeeper will refuse it on every Mac but this one."
-  read -r -p "   build anyway? [y/N] " yn
-  [ "$yn" = "y" ] || exit 1
-fi
+# The feed has to describe this version. It is generated from package.json, so a
+# mismatch means release.sh was not the last thing to touch it.
+FEED_V="$(node -p "require('./site/version.json').version")"
+[ "$FEED_V" = "$V" ] || { echo "site/version.json says $FEED_V, package.json says $V: rerun scripts/release.sh"; exit 1; }
 
-echo "==> building $TAG"
-pnpm bundle
-[ -f "$DMG" ] || { echo "no disk image at $DMG"; exit 1; }
-
-# Trust the verdict, not the exit code: tauri will happily bundle an unsigned
-# app, and the failure only shows up on someone else's machine.
-APP="src-tauri/target/release/bundle/macos/Marlin.app"
-if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
-  spctl -a -vvv -t exec "$APP" || { echo "Gatekeeper rejected the build"; exit 1; }
-  xcrun stapler validate "$DMG" || { echo "the disk image is not stapled"; exit 1; }
-fi
-
-echo "==> pushing"
+echo "==> pushing $TAG"
 git push
 git push --tags
 
-# The changelog section for this version, minus its own heading, is the release
-# body. One source for what changed, never two that disagree.
-NOTES="$(awk -v v="## \\[$V\\]" 'BEGIN{p=0} $0 ~ v {p=1; next} /^## \[/ && p {exit} p' CHANGELOG.md)"
+# Wait for the workflow rather than guessing. A release that is still a draft,
+# or still uploading, looks exactly like a release with missing artefacts.
+echo "==> waiting for the release build"
+for _ in $(seq 1 120); do
+  if gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx false; then
+    break
+  fi
+  printf '.'
+  sleep 30
+done
+echo
+gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx false || {
+  echo "$TAG is still a draft after an hour. Check: gh run list --workflow=release.yml"
+  exit 1
+}
 
-echo "==> releasing"
-if gh release view "$TAG" >/dev/null 2>&1; then
-  gh release upload "$TAG" "$DMG" --clobber
-else
-  gh release create "$TAG" "$DMG" --title "Marlin $TAG" --notes "$NOTES"
+# Every URL the feed will hand out, checked against the release that exists.
+# A name invented in version-json.mjs and never verified is how the update
+# button starts downloading nothing.
+echo "==> checking every download in the feed"
+# An empty `downloads` would make the loop below check nothing and pass, which
+# is the one failure mode a verification step must not have.
+COUNT="$(node -p "Object.keys(require('./site/version.json').downloads||{}).length")"
+[ "$COUNT" -gt 0 ] || { echo "site/version.json has no downloads to check: rerun scripts/version-json.mjs"; exit 1; }
+FAIL=0
+while read -r KEY_NAME URL; do
+  NAME="${URL##*/}"
+  if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qxF "$NAME"; then
+    echo "    ok       $KEY_NAME -> $NAME"
+  else
+    echo "    MISSING  $KEY_NAME -> $NAME"
+    FAIL=1
+  fi
+done < <(node -p "Object.entries(require('./site/version.json').downloads).map(([k,v])=>k+' '+v).join('\n')")
+
+if [ "$FAIL" = 1 ]; then
+  echo
+  echo "The release is missing artefacts the feed names. Publishing now would point"
+  echo "installed copies at a 404. What the release actually has:"
+  gh release view "$TAG" --json assets --jq '.assets[].name' | sed 's/^/    /'
+  echo
+  echo "Fix the names in scripts/version-json.mjs, rerun it, amend, and try again."
+  exit 1
 fi
 
-# Last, and only now that the disk image is downloadable. marlin.gazar.dev is a
+# Last, and only now that every installer is downloadable. marlin.gazar.dev is a
 # hand-run nginx container bind-mounting /data/marlin-site; there is no CI for
 # it, so the feed goes up over scp.
 echo "==> publishing the update feed"

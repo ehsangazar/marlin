@@ -16,9 +16,19 @@
 //! day, carrying no identifiers, no version query string and no user agent
 //! beyond the crate name, plus the disk image itself if you ask for it. These
 //! are the only outbound requests Marlin ever makes.
+//!
+//! **Installing in place is macOS only, and the feed is not.** The swap below
+//! is `hdiutil` and `ditto` moving an `.app` around, which has no counterpart
+//! on Windows: an NSIS installer cannot overwrite the `.exe` it is running
+//! from. So every platform gets told a new version exists, and only macOS gets
+//! the button that installs it; elsewhere [`UpdateInfo::dmg`] is left empty and
+//! the button opens the release page instead. That degrading is deliberate and
+//! is handled in `settings.ts`, which already treats an empty `dmg` as "send
+//! them to the page rather than fail at a button".
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -30,7 +40,34 @@ struct Feed {
     notes: Option<String>,
     url: Option<String>,
     published: Option<String>,
+    /// The macOS disk image. Predates `downloads` and is still read first by
+    /// every 0.1.x already installed, so the feed keeps writing it.
     dmg: Option<String>,
+    /// One artefact per platform, keyed by [`platform_key`]. Optional because a
+    /// copy of Marlin can be older than the feed it is reading, never the other
+    /// way round.
+    downloads: Option<HashMap<String, String>>,
+}
+
+/// How the feed names the artefact for the machine this build is running on.
+///
+/// Compiled in rather than detected, because a binary already knows which one
+/// it is: an Apple Silicon build asking at runtime whether it is Intel can only
+/// get the answer wrong, via Rosetta.
+pub fn platform_key() -> &'static str {
+    if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") {
+            "macos-aarch64"
+        } else {
+            "macos-x86_64"
+        }
+    } else if cfg!(target_os = "windows") {
+        "windows-x86_64"
+    } else if cfg!(target_arch = "aarch64") {
+        "linux-aarch64"
+    } else {
+        "linux-x86_64"
+    }
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -95,15 +132,34 @@ pub fn check() -> Result<UpdateInfo> {
             .url
             .unwrap_or_else(|| "https://github.com/ehsangazar/marlin/releases".into()),
         published: feed.published.unwrap_or_default(),
-        dmg: feed.dmg.unwrap_or_default(),
+        dmg: installable(feed.downloads.as_ref(), feed.dmg.as_deref()),
         current,
     })
+}
+
+/// The artefact this build can install *without leaving the app*, which is a
+/// narrower question than "the artefact for this platform".
+///
+/// Only macOS has an in-place install, so everywhere else this is empty on
+/// purpose and the caller shows a link. On macOS it prefers the per-platform
+/// entry and falls back to the legacy `dmg` field, so a new binary reading an
+/// old feed still updates.
+fn installable(downloads: Option<&HashMap<String, String>>, legacy: Option<&str>) -> String {
+    if !cfg!(target_os = "macos") {
+        return String::new();
+    }
+    downloads
+        .and_then(|d| d.get(platform_key()))
+        .map(String::as_str)
+        .or(legacy)
+        .unwrap_or_default()
+        .to_string()
 }
 
 fn run(bin: &str, args: &[&str]) -> Result<()> {
     let out = Command::new(bin).args(args).output()?;
     if !out.status.success() {
-        bail!("{bin} failed: {}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        bail!("{bin} failed: {}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(())
 }
@@ -128,6 +184,13 @@ fn bundle() -> Result<PathBuf> {
 /// puts back what was working rather than leaving no Marlin at all. Returns the
 /// installed path, ready to relaunch.
 pub fn install(url: &str) -> Result<PathBuf> {
+    // Guarded at runtime rather than compiled out, so the non-macOS build keeps
+    // one honest error path instead of a missing symbol. `check` should never
+    // route here off macOS anyway: it leaves `dmg` empty and the caller opens
+    // the release page.
+    if !cfg!(target_os = "macos") {
+        bail!("installing in place is macOS only; download the installer from the release page");
+    }
     if !url.starts_with("https://") {
         bail!("refusing to install over anything but https");
     }
@@ -224,7 +287,8 @@ fn shell_quote(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::newer_than;
+    use super::{installable, newer_than, platform_key};
+    use std::collections::HashMap;
 
     #[test]
     fn compares_numerically_not_lexically() {
@@ -233,5 +297,52 @@ mod tests {
         assert!(!newer_than("0.1.0", "0.1.0"));
         assert!(!newer_than("0.1.0", "0.2.0"));
         assert!(newer_than("v0.2.0", "0.1.9"));
+    }
+
+    fn feed() -> HashMap<String, String> {
+        [
+            ("macos-aarch64", "https://x/Marlin_1_universal.dmg"),
+            ("macos-x86_64", "https://x/Marlin_1_universal.dmg"),
+            ("windows-x86_64", "https://x/Marlin_1_x64-setup.exe"),
+        ]
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+    }
+
+    /// The bug this guards: the feed used to carry one `dmg` and hand it to
+    /// everyone, so an Intel Mac was offered an Apple Silicon app and Windows
+    /// was offered a disk image it cannot open.
+    #[test]
+    fn only_macos_gets_something_to_install() {
+        let got = installable(Some(&feed()), None);
+        if cfg!(target_os = "macos") {
+            assert_eq!(got, feed()[platform_key()]);
+        } else {
+            assert!(got.is_empty(), "non-macOS must degrade to a link, got {got:?}");
+        }
+    }
+
+    /// A new binary reading a feed published before `downloads` existed.
+    #[test]
+    fn falls_back_to_the_legacy_field() {
+        let got = installable(None, Some("https://x/old.dmg"));
+        assert_eq!(got, if cfg!(target_os = "macos") { "https://x/old.dmg" } else { "" });
+    }
+
+    #[test]
+    fn a_feed_missing_this_platform_is_not_a_crash() {
+        let mut f = feed();
+        f.remove(platform_key());
+        assert!(installable(Some(&f), None).is_empty());
+    }
+
+    #[test]
+    fn the_key_matches_what_the_generator_writes() {
+        // scripts/version-json.mjs writes exactly these three.
+        assert!(matches!(
+            platform_key(),
+            "macos-aarch64" | "macos-x86_64" | "windows-x86_64" | "linux-aarch64" | "linux-x86_64"
+        ));
     }
 }

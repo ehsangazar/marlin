@@ -1,0 +1,10 @@
+# Blank issues stay on: a bug that does not fit a form is still a bug worth
+# having, and a form that refuses it just sends the person away.
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question, or show what you built
+    url: https://github.com/ehsangazar/marlin/discussions
+    about: Discussions, for anything that is not a defect or a request.
+  - name: Sponsor Marlin
+    url: https://github.com/sponsors/ehsangazar
+    about: Marlin is free, MIT, and maintained by one person. Sponsorship is what pays for the time.
