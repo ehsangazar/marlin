@@ -156,7 +156,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          shopt -s nullglob globstar braceexpand
+          # `nullglob` only, and the two that are not here were each a bug.
+          # `braceexpand` is a `set -o` option, not a shopt, so it is rejected on
+          # every platform; `globstar` does not exist in bash 3.2, which is what
+          # /bin/bash still is on the macOS runner. Under `set -e` a rejected
+          # shopt kills the step on line 2, so the glob below never ran and the
+          # error claimed the bundler had produced nothing while the build log
+          # showed it producing all three installers. Neither option was needed:
+          # there is no `**` in the patterns, and brace expansion is on by
+          # default in every bash that matters.
+          shopt -s nullglob
           files=(${{ matrix.glob }})
           if [ ${#files[@]} -eq 0 ]; then
             echo "::error::no installers matched ${{ matrix.glob }}: the bundler produced nothing"
