@@ -8,13 +8,21 @@
   <body>
     <div class="win">
       <div class="titlebar" data-tauri-drag-region>
-        <span class="traffic"></span>
         <span class="name" id="wintitle">marlin</span>
+        <span class="tools">
+          <button class="tt" id="btn-new" title="New tab (⌘T)">+</button>
+          <button class="tt" id="btn-bar" title="Cycle the tab bar (⌘⇧B)">⇋</button>
+        </span>
       </div>
-      <div class="body">
-        <div class="panes" id="panes"></div>
+      <div class="body h" id="winbody">
+        <div class="tabbar" id="tabbar" role="tablist"></div>
+        <div class="main">
+          <div class="panes" id="panes"></div>
+        </div>
       </div>
       <div class="statusbar">
+        <span>bar <b id="st-bar">horizontal</b></span>
+        <span>tabs <b id="st-tabs">0</b></span>
         <span>panes <b id="st-panes">0</b></span>
         <span>shell <b id="st-shell">—</b></span>
         <span>theme <b id="st-theme">—</b></span>

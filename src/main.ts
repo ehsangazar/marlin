@@ -20,19 +20,26 @@ interface PtyOutput {
   data: string;
 }
 
+type BarState = "h" | "v" | "hidden";
+
 const app = {
   theme: THEMES[0] as MarlinTheme,
   tabs: [] as Tab[],
   active: 0,
   focused: null as Pane | null,
+  bar: "h" as BarState,
 };
 
 const els = {
   panes: document.getElementById("panes") as HTMLDivElement,
+  body: document.getElementById("winbody") as HTMLDivElement,
+  tabbar: document.getElementById("tabbar") as HTMLDivElement,
   title: document.getElementById("wintitle") as HTMLSpanElement,
   stTheme: document.getElementById("st-theme") as HTMLSpanElement,
   stPanes: document.getElementById("st-panes") as HTMLSpanElement,
+  stTabs: document.getElementById("st-tabs") as HTMLSpanElement,
   stShell: document.getElementById("st-shell") as HTMLSpanElement,
+  stBar: document.getElementById("st-bar") as HTMLSpanElement,
 };
 
 const curTab = (): Tab => app.tabs[app.active] as Tab;
@@ -42,13 +49,77 @@ function paneByPty(id: number): Pane | undefined {
   return allPanes().find((p) => p.ptyId === id);
 }
 
+/** A tab is named after its focused pane, and follows focus, until you name it
+ *  yourself. Then it is pinned and the shell stops touching it. */
+function tabLabel(t: Tab): string {
+  if (t.pinned && t.name) return t.name;
+  const ls = leaves(t.root);
+  const hit = ls.find((l) => l.pane === app.focused);
+  return (hit ?? ls[0])?.pane.name ?? "shell";
+}
+
 function refreshChrome(): void {
   els.title.textContent = app.focused ? `marlin · ${app.focused.name}` : "marlin";
   els.stTheme.textContent = app.theme.name;
+  els.stTabs.textContent = String(app.tabs.length);
+  els.stBar.textContent =
+    app.bar === "h" ? "horizontal" : app.bar === "v" ? "vertical" : "hidden";
   // setTheme runs before the first tab exists, and a pane's title callback can
   // fire during construction. Neither should have to know about boot order.
   const tab = app.tabs[app.active];
   els.stPanes.textContent = tab ? String(leaves(tab.root).length) : "0";
+  renderTabs();
+}
+
+function renderTabs(): void {
+  if (!app.tabs.length) {
+    els.tabbar.replaceChildren();
+    return;
+  }
+  const nodes = app.tabs.map((t, i) => {
+    const b = document.createElement("div");
+    b.className = "tab";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", i === app.active ? "true" : "false");
+    b.tabIndex = 0;
+
+    const idx = document.createElement("span");
+    idx.className = "idx";
+    idx.textContent = String(i + 1);
+
+    const lbl = document.createElement("span");
+    lbl.className = "lbl";
+    lbl.textContent = tabLabel(t);
+
+    const x = document.createElement("button");
+    x.className = "x";
+    x.textContent = "×";
+    x.title = "Close tab";
+    x.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeTab(i);
+    });
+
+    b.append(idx, lbl, x);
+    b.addEventListener("click", () => selectTab(i));
+    return b;
+  });
+  els.tabbar.replaceChildren(...nodes);
+}
+
+function applyBar(): void {
+  els.body.className = `body ${app.bar === "hidden" ? "h hidden" : app.bar}`;
+  requestAnimationFrame(() => {
+    for (const l of leaves(curTab().root)) l.pane.resize();
+  });
+}
+
+/** One key cycles all three states, which is simpler than the pair it replaced
+ *  and leaves Cmd+B free for the sidebar, where VSCode users expect it. */
+function cycleBar(): void {
+  app.bar = app.bar === "h" ? "v" : app.bar === "v" ? "hidden" : "h";
+  applyBar();
+  refreshChrome();
 }
 
 /** Rebuild the pane area from the tree, then re-fit. Pane elements are moved,
@@ -95,8 +166,14 @@ function closeFocused(): void {
   if (!app.focused) return;
   const target = findLeaf(tab.root, app.focused);
   if (!target) return;
-  const remaining = leaves(tab.root);
-  if (remaining.length === 1) return; // last pane in the last tab: leave it be
+
+  // Last pane in the tab closes the tab. Last tab in the window stays: a
+  // terminal with nothing in it is not a state worth being able to reach.
+  if (leaves(tab.root).length === 1) {
+    if (app.tabs.length > 1) closeTab(app.active);
+    return;
+  }
+
   target.pane.dispose();
   const next = removeNode(tab.root, target);
   if (!next) return;
@@ -107,6 +184,36 @@ function closeFocused(): void {
   if (app.focused) focusPane(app.focused);
 }
 
+function selectTab(i: number): void {
+  if (i < 0 || i >= app.tabs.length) return;
+  app.active = i;
+  const first = leaves(curTab().root)[0];
+  app.focused = first ? first.pane : null;
+  render();
+  if (app.focused) focusPane(app.focused);
+}
+
+async function newTab(): Promise<void> {
+  const pane = await makePane();
+  app.tabs.push({ name: "", pinned: false, root: leaf(pane) });
+  app.active = app.tabs.length - 1;
+  app.focused = pane;
+  render();
+  await pane.open();
+  focusPane(pane);
+  render();
+}
+
+function closeTab(i: number): void {
+  if (app.tabs.length <= 1) return;
+  const tab = app.tabs[i];
+  if (!tab) return;
+  for (const l of leaves(tab.root)) l.pane.dispose();
+  app.tabs.splice(i, 1);
+  if (app.active >= app.tabs.length) app.active = app.tabs.length - 1;
+  selectTab(app.active);
+}
+
 /**
  * Returning false stops xterm handling the event, which is how a shortcut is
  * taken before it reaches the shell.
@@ -115,12 +222,34 @@ function handleShortcut(e: KeyboardEvent): boolean {
   if (e.type !== "keydown" || !e.metaKey) return true;
   const k = e.key.toLowerCase();
 
+  // Terminal actions use iTerm2's bindings, file actions will use VSCode's.
+  // Where they overlap, the key belongs to whichever app the feature came from.
   if (k === "d") {
     void doSplit(e.shiftKey ? "col" : "row");
     return false;
   }
   if (k === "w") {
     closeFocused();
+    return false;
+  }
+  if (k === "t") {
+    void newTab();
+    return false;
+  }
+  if (k === "b" && e.shiftKey) {
+    cycleBar();
+    return false;
+  }
+  if (k === "]" || (k === "}" && e.shiftKey)) {
+    selectTab((app.active + 1) % app.tabs.length);
+    return false;
+  }
+  if (k === "[" || (k === "{" && e.shiftKey)) {
+    selectTab((app.active - 1 + app.tabs.length) % app.tabs.length);
+    return false;
+  }
+  if (k >= "1" && k <= "9") {
+    selectTab(Number(k) - 1);
     return false;
   }
   return true;
@@ -148,6 +277,10 @@ async function boot(): Promise<void> {
     pane.write("\r\n\x1b[38;5;244m[process exited]\x1b[0m\r\n");
     pane.status = "err";
   });
+
+  applyBar();
+  document.getElementById("btn-new")?.addEventListener("click", () => void newTab());
+  document.getElementById("btn-bar")?.addEventListener("click", cycleBar);
 
   const first = await makePane();
   app.tabs.push({ name: "", pinned: false, root: leaf(first) });
