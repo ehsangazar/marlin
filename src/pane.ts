@@ -31,6 +31,8 @@ export class Pane {
   ptyId: number | null = null;
 
   private fit = new FitAddon();
+  private ro: ResizeObserver | null = null;
+  private fitPending = 0;
   readonly search = new SearchAddon();
   private webgl: WebglAddon | null = null;
   private onTitle?: (p: Pane) => void;
@@ -103,6 +105,13 @@ export class Pane {
       if (this.ptyId !== null) void invoke("pty_resize", { id: this.ptyId, rows, cols });
     });
 
+    // Watch the element itself rather than the window. Splitting a pane,
+    // toggling the tree and rotating the tab bar all change a pane's size
+    // without a window resize, and any path that forgets to call resize()
+    // silently leaves the pty believing the wrong width.
+    this.ro = new ResizeObserver(() => this.resize());
+    this.ro.observe(this.el);
+
     // OSC 0 / OSC 2. The shell names the pane until you name it yourself.
     this.term.onTitleChange((t) => {
       if (this.pinned || !t) return;
@@ -148,12 +157,21 @@ export class Pane {
     this.term.write(data);
   }
 
-  resize(): void {
+  /** Refit, but never against an element that has no size: FitAddon divides by
+   *  the cell width and a hidden pane yields a nonsense column count that then
+   *  gets sent to the pty. */
+  private refit(): void {
+    if (this.el.clientWidth < 24 || this.el.clientHeight < 24) return;
     try {
       this.fit.fit();
     } catch {
-      /* element not laid out yet */
+      /* not laid out yet */
     }
+  }
+
+  resize(): void {
+    cancelAnimationFrame(this.fitPending);
+    this.fitPending = requestAnimationFrame(() => this.refit());
   }
 
   setTheme(theme: MarlinTheme): void {
@@ -165,6 +183,8 @@ export class Pane {
   }
 
   dispose(): void {
+    this.ro?.disconnect();
+    cancelAnimationFrame(this.fitPending);
     if (this.ptyId !== null) void invoke("pty_close", { id: this.ptyId });
     this.webgl?.dispose();
     this.term.dispose();
