@@ -8,7 +8,9 @@ export interface Config {
   cursorBlink: boolean;
 
   tabBar: "top" | "side" | "hidden";
+  paneTitles: boolean;
   fileTree: boolean;
+  treeWidth: number;
   diffView: "unified" | "split";
 
   shell: string;
@@ -28,7 +30,9 @@ export const DEFAULTS: Config = {
   cursorBlink: false,
 
   tabBar: "top",
+  paneTitles: true,
   fileTree: true,
+  treeWidth: 212,
   diffView: "unified",
 
   shell: "",
@@ -50,7 +54,7 @@ export const DEFAULTS: Config = {
  */
 const SECTIONS: Record<string, (keyof Config)[]> = {
   appearance: ["theme", "fontFamily", "fontSize", "cursorStyle", "cursorBlink"],
-  layout: ["tabBar", "fileTree", "diffView"],
+  layout: ["tabBar", "paneTitles", "fileTree", "treeWidth", "diffView"],
   terminal: ["shell", "scrollback", "copyOnSelect", "rightClickPaste"],
   notifications: ["notifications"],
 };
@@ -62,7 +66,9 @@ const SNAKE: Record<string, keyof Config> = {
   cursor_style: "cursorStyle",
   cursor_blink: "cursorBlink",
   tab_bar: "tabBar",
+  pane_titles: "paneTitles",
   file_tree: "fileTree",
+  tree_width: "treeWidth",
   diff_view: "diffView",
   shell: "shell",
   scrollback: "scrollback",

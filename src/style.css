@@ -20,7 +20,9 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 
 .body { flex:1; display:flex; min-height:0; }
 .panes { flex:1; display:flex; min-width:0; min-height:0; background:var(--m-line); gap:1px; padding:1px; }
-.pane-term { flex:1; min-width:0; min-height:0; background:var(--m-bg); padding:6px 8px; overflow:hidden; }
+.pane-term { flex:1; min-width:0; min-height:0; background:var(--m-bg); padding:6px 8px;
+             overflow:hidden; display:flex; flex-direction:column; }
+.pbody { flex:1; min-height:0; min-width:0; }
 .pane-term .xterm { height:100%; }
 /* No scrollbar in the terminal viewport, on purpose.
    An 8px scrollbar that appears once scrollback exists changes the pane's
@@ -82,10 +84,24 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .tt:hover { background:var(--m-line); color:var(--m-fg); }
 
 /* Sidebar: fixed on the left, whatever the tab bar is doing. A sidebar that
-   moves is a sidebar you have to look for. */
-.tree { width:212px; flex:0 0 212px; background:var(--m-bar); overflow:auto;
-        border-right:1px solid var(--m-line); padding-bottom:6px; user-select:none; }
-.main.notree .tree { display:none; }
+   moves is a sidebar you have to look for. Its width is yours to drag, and it
+   is a config key rather than session state, because a repository with long
+   branch names wants a wider tree every time you open it, not once. */
+.tree { width:var(--tree-w,212px); flex:0 0 var(--tree-w,212px); background:var(--m-bar);
+        overflow:auto; border-right:1px solid var(--m-line); padding-bottom:6px;
+        user-select:none; }
+.main.notree .tree, .main.notree .treegrip { display:none; }
+
+/* Four pixels wide, eight to hit: a resize handle you have to aim at is a
+   resize handle nobody finds. It sits over the border rather than taking space,
+   so the tree is exactly as wide as it says it is. */
+.treegrip { flex:0 0 0; width:0; position:relative; z-index:6; }
+.treegrip::after { content:""; position:absolute; top:0; bottom:0; left:-4px; width:9px;
+                   cursor:col-resize; }
+.treegrip:hover::after, .treegrip.on::after { background:var(--m-acc); opacity:.5;
+                                              left:-1px; width:3px; }
+body.resizing { cursor:col-resize; user-select:none; }
+body.resizing .xterm { pointer-events:none; }
 .treehead { display:flex; align-items:center; gap:.4rem; padding:.42rem .6rem;
             font-size:.62rem; color:var(--m-dim); letter-spacing:.06em;
             border-bottom:1px solid var(--m-line); margin-bottom:4px;
@@ -209,6 +225,16 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .slab em { font-style:normal; font-size:.6rem; color:var(--m-dim); opacity:.75; line-height:1.35; }
 .setrow select, .setrow input { font:inherit; font-size:.72rem; background:var(--m-bg);
   color:var(--m-fg); border:1px solid var(--m-line); border-radius:4px; padding:.2rem .35rem; }
+/* Segmented choice. Unstyled, these render as the platform's own buttons: light
+   pills, shoulder to shoulder, in a dark panel. Spaced rather than butted into
+   one bar, because each one is its own hit target and should look like it. */
+.seg { display:flex; gap:.3rem; flex:0 0 auto; }
+.seg button { font:inherit; font-size:.66rem; padding:.25rem .5rem; cursor:pointer;
+              background:var(--m-bg); color:var(--m-dim);
+              border:1px solid var(--m-line); border-radius:4px; }
+.seg button:hover { color:var(--m-fg); border-color:var(--m-dim); }
+.seg button[aria-pressed="true"] { background:var(--m-acc); border-color:var(--m-acc);
+                                   color:#06101F; font-weight:600; }
 .sw { width:34px; height:19px; border-radius:20px; background:var(--m-line); border:0;
       position:relative; cursor:pointer; padding:0; flex:0 0 auto; }
 .sw::after { content:""; position:absolute; top:2px; left:2px; width:15px; height:15px;
@@ -322,10 +348,31 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
         padding:.08rem .38rem; cursor:pointer; }
 .vbtn:hover { color:var(--m-fg); border-color:var(--m-acc); }
 .vbtn.primary { background:var(--m-acc); color:#06101F; border-color:var(--m-acc); }
-.vedit { flex:1; min-width:0; background:var(--m-bg); color:var(--m-fg); border:0; outline:none;
-         resize:none; font:inherit; font-size:.72rem; line-height:1.5; padding:.45rem .6rem;
-         white-space:pre; overflow:auto; tab-size:2; }
-.vgutter { overflow:hidden; }
+/* The editor: a highlighted layer and a transparent textarea, exactly on top of
+   each other. Every metric that could move a glyph is declared once, for both,
+   because a half-pixel disagreement between the two is visible immediately as
+   colour sliding off the characters it belongs to. */
+.vcode { position:relative; flex:1; min-width:0; align-self:stretch; }
+.vcode > * { position:absolute; inset:0; margin:0; border:0; overflow:auto;
+             font-family:inherit; font-size:.72rem; line-height:1.5; letter-spacing:0;
+             padding:.45rem .6rem; white-space:pre; word-spacing:normal; tab-size:2;
+             box-sizing:border-box; }
+/* The colour layer takes no input; the textarea above it takes all of it. */
+.vhl { pointer-events:none; overflow:hidden; background:transparent; }
+.vedit { background:transparent; color:transparent; caret-color:var(--m-fg); resize:none;
+         outline:none; }
+.vedit::selection { background:var(--m-acc); color:transparent; }
+/* Above the limit there is no highlighting to show, so the text is painted by
+   the textarea itself rather than by an empty layer underneath it. */
+.vcode.plain .vhl { display:none; }
+.vcode.plain .vedit { color:var(--m-fg); }
+.vcode.plain .vedit::selection { color:var(--m-bg); }
+
+/* The editing wrap has to be told to fill the pane. Without this the textarea
+   keeps its intrinsic two-row height, which is what "edit mode is broken"
+   looked like. Reading is left alone: there the pane scrolls the document. */
+.vfilewrap.editing { height:100%; align-items:stretch; }
+.vgutter { overflow:hidden; flex:0 0 auto; }
 .vflash { position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
           background:var(--m-chrome); border:1px solid var(--m-red); color:var(--m-fg);
           font-size:.66rem; padding:.3rem .6rem; border-radius:5px; max-width:80%;
@@ -350,15 +397,40 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .sheetcard h4 .sver { font-size:.6rem; font-weight:500; color:var(--m-dim);
                       margin-left:.5rem; letter-spacing:.04em; }
 
-/* Pane drag grip: small, top-right, visible on hover. The terminal body stays
-   selectable, because selecting text is what a terminal is for. */
-.pgrip { position:absolute; top:2px; right:6px; width:22px; height:12px; z-index:3;
-         cursor:grab; opacity:0; border-radius:3px; background:
-         repeating-linear-gradient(90deg,var(--m-line) 0 2px,transparent 2px 4px); }
-.pane-term:hover .pgrip { opacity:.8; }
-.pgrip:hover { opacity:1 !important; }
+/* Pane title bar: what this pane is called, what it is doing, and the handle it
+   is dragged by. One line, because it is spending a terminal row to be there.
+   The terminal body below stays selectable, because selecting text is what a
+   terminal is for. */
+.phead { display:flex; align-items:center; gap:.4rem; flex:0 0 auto;
+         padding:0 .1rem .3rem; font-size:.66rem; color:var(--m-dim);
+         cursor:grab; user-select:none; }
+.phead:active { cursor:grabbing; }
+.pname { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pane-term.focus .pname { color:var(--m-fg); }
+/* The old drag grip, kept as a hover-only hint now that the whole bar is the
+   handle: without it nothing says the title bar can be dragged. */
+.phead::after { content:""; margin-left:auto; flex:0 0 auto; width:22px; height:8px;
+                border-radius:3px; opacity:0; background:
+                repeating-linear-gradient(90deg,var(--m-line) 0 2px,transparent 2px 4px); }
+.pane-term:hover .phead::after { opacity:.8; }
+.panes.noheads .phead { display:none; }
 .pane-term.drag { opacity:.4; }
 .pane-term.dragover { outline:2px dashed var(--m-vio); outline-offset:-3px; }
+
+/* Where the pane would land, shown as the shape it would land in. An edge drop
+   splits; the middle swaps, which is the old behaviour and still the one you
+   get by aiming at nothing in particular. */
+.pane-term.dragover::before { content:""; position:absolute; inset:0; z-index:4;
+                              pointer-events:none; background:var(--m-vio); opacity:.22;
+                              transition:inset .08s ease; }
+.pane-term.dragover.zone-left::before   { inset:0 50% 0 0; }
+.pane-term.dragover.zone-right::before  { inset:0 0 0 50%; }
+.pane-term.dragover.zone-top::before    { inset:0 0 50% 0; }
+.pane-term.dragover.zone-bottom::before { inset:50% 0 0 0; }
+/* A swap is two panes trading places, so the target is outlined whole rather
+   than shaded on one side. */
+.pane-term.dragover.zone-swap::before { inset:0; opacity:.12; }
+.tab.dragtarget { outline:2px dashed var(--m-vio); outline-offset:-2px; }
 
 .askbox.confirm { width:min(420px,92%); }
 .asktitle.strong { color:var(--m-fg); font-size:.82rem; font-weight:600; margin-bottom:.35rem; }

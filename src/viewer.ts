@@ -15,14 +15,33 @@ interface FileDoc {
 }
 
 /**
- * A file or diff surface. Reading is the default and stays highlighted; editing
- * is an explicit mode.
+ * A file or diff surface. **A file opens ready to type in.**
  *
- * The split is the design decision. Highlighted markup is not editable text, so
- * highlighting *while* typing needs a real editor component (CodeMirror,
- * Monaco) at 200KB-plus. Making editing a mode keeps reading fast and
- * highlighted, keeps writing simple and correct, and costs one keystroke.
+ * The old arrangement made editing a mode you had to ask for, on the reasoning
+ * that highlighted markup is not editable text and highlighting while typing
+ * needs CodeMirror or Monaco at 200KB-plus. The first half is true; the
+ * conclusion was not. A textarea with transparent text, sitting exactly on top
+ * of a highlighted `<pre>` of the same string, is both at once: the browser
+ * does the editing, highlight.js does the colour, and the only thing that has
+ * to be right is that the two agree on metrics down to the pixel. That is what
+ * `.vcode > *` enforces in the stylesheet, and it is why the font, size, line
+ * height, padding and tab size are declared in one place for both layers.
+ *
+ * Re-highlighting is throttled to a frame and skipped entirely above
+ * [`HL_LIMIT`], because the point of the overlay is that typing stays as fast
+ * as a textarea: colour is allowed to arrive late, but a keystroke is not.
  */
+
+/**
+ * Files above this are edited without highlighting.
+ *
+ * highlight.js is O(n) in a way that is fine for a source file and not fine for
+ * a bundle or a log: at a megabyte it costs more than a frame, and a highlight
+ * that costs more than a frame is felt as the editor stuttering. Plain text is
+ * the right trade there, and the badge says so rather than leaving you to
+ * wonder why the colour went away.
+ */
+const HL_LIMIT = 400_000;
 export class Viewer {
   readonly el: HTMLDivElement;
   name: string;
@@ -41,6 +60,9 @@ export class Viewer {
   private stamp = "";
   private original = "";
   private area: HTMLTextAreaElement | null = null;
+  private hl: HTMLPreElement | null = null;
+  private gutter: HTMLPreElement | null = null;
+  private hlPending = 0;
 
   constructor(opts: {
     kind: "file" | "diff";
@@ -60,6 +82,10 @@ export class Viewer {
     this.mode = opts.mode ?? "unified";
     this.onMode = opts.onMode;
     this.onClose = opts.onClose;
+    // A file opens editable. Clicking a file to read it and then having to ask
+    // for permission to fix the typo you came to fix is a mode you pay for
+    // every time and benefit from never.
+    this.editing = this.kind === "file";
 
     this.el = document.createElement("div");
     this.el.className = "pane-term viewer";
@@ -106,7 +132,14 @@ export class Viewer {
 
     const badge = document.createElement("span");
     badge.className = `vbadge${this.editing ? " editing" : ""}`;
-    badge.textContent = this.kind === "diff" ? "diff" : this.editing ? "editing" : "read-only";
+    badge.textContent =
+      this.kind === "diff"
+        ? "diff"
+        : !this.editing
+          ? "read-only"
+          : this.original.length > HL_LIMIT
+            ? "editing, too big to highlight"
+            : "editing";
     this.head.append(nm, badge);
 
     if (this.dirty) {
@@ -133,26 +166,32 @@ export class Viewer {
     } else {
       const tools = document.createElement("span");
       tools.className = "vtools";
+
+      // Save is always present while editing, and says which of the two things
+      // it means: there is something to write, or there is not. A button that
+      // vanishes when it has nothing to do is a button you go looking for.
+      const save = document.createElement("button");
+      save.className = `vbtn${this.dirty ? " primary" : ""}`;
+      save.textContent = this.dirty ? "Save" : "Saved";
+      save.title = this.dirty ? "Save this file (⌘S)" : "No unsaved changes";
+      save.disabled = !this.dirty || !this.editing;
+      save.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void this.save();
+      });
+      tools.appendChild(save);
+
       const edit = document.createElement("button");
       edit.className = "vbtn";
-      edit.textContent = this.editing ? "done" : "edit";
-      edit.title = this.editing ? "Stop editing (⌘E)" : "Edit this file (⌘E)";
+      edit.textContent = this.editing ? "Read only" : "Edit";
+      edit.title = this.editing
+        ? "Stop editing and show it highlighted (⌘E)"
+        : "Edit this file (⌘E)";
       edit.addEventListener("click", (e) => {
         e.stopPropagation();
         void this.setEditing(!this.editing);
       });
       tools.appendChild(edit);
-      if (this.editing) {
-        const save = document.createElement("button");
-        save.className = "vbtn primary";
-        save.textContent = "save";
-        save.title = "Save (⌘S)";
-        save.addEventListener("click", (e) => {
-          e.stopPropagation();
-          void this.save();
-        });
-        tools.appendChild(save);
-      }
       this.head.appendChild(tools);
     }
 
@@ -255,54 +294,128 @@ export class Viewer {
     setTimeout(() => d.remove(), 3200);
   }
 
+  private lineCount = 0;
+
+  /** The gutter is rebuilt only when the number of lines actually changes,
+   *  because typing inside one line is the common case and renumbering on every
+   *  keystroke would be the most expensive thing in the editor. */
+  private setGutter(n: number): void {
+    if (!this.gutter || n === this.lineCount) return;
+    this.lineCount = n;
+    this.gutter.textContent = Array.from({ length: n }, (_, i) => String(i + 1)).join("\n");
+  }
+
+  /** Colour arrives on the next frame, and only the last request in a frame is
+   *  honoured: typing must never wait for highlight.js. */
+  private scheduleHighlight(): void {
+    if (!this.hl || !this.area) return;
+    cancelAnimationFrame(this.hlPending);
+    this.hlPending = requestAnimationFrame(() => {
+      if (!this.hl || !this.area) return;
+      const text = this.area.value;
+      const plain = text.length > HL_LIMIT;
+      this.hl.parentElement?.classList.toggle("plain", plain);
+      if (plain) return;
+      highlightTo(this.hl, text, this.name);
+    });
+  }
+
   private renderFile(content: string): void {
     const wrap = document.createElement("div");
-    wrap.className = "vfilewrap";
+    // Editing fills the pane and scrolls inside itself; reading lets the pane
+    // scroll the whole document, which is what a reader expects.
+    wrap.className = `vfilewrap${this.editing ? " editing" : ""}`;
 
-    const lines = content.split("\n");
     const gutter = document.createElement("pre");
     gutter.className = "vgutter";
-    gutter.textContent = lines.map((_, i) => String(i + 1)).join("\n");
+    this.gutter = gutter;
+    this.lineCount = 0;
+    this.setGutter(content.split("\n").length);
     wrap.appendChild(gutter);
 
-    if (this.editing) {
-      const area = document.createElement("textarea");
-      area.className = "vedit";
-      area.spellcheck = false;
-      area.value = content;
-      area.addEventListener("input", () => {
-        const n = area.value.split("\n").length;
-        if (n !== (gutter.textContent?.split("\n").length ?? 0)) {
-          gutter.textContent = Array.from({ length: n }, (_, i) => String(i + 1)).join("\n");
-        }
-        const nowDirty = area.value !== this.original;
-        if (nowDirty !== this.dirty) {
-          this.dirty = nowDirty;
-          this.renderHead();
-        }
-      });
-      // The terminal's key handler must not see typing meant for this box.
-      area.addEventListener("keydown", (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-          e.preventDefault();
-          void this.save();
-        }
-        e.stopPropagation();
-      });
-      area.addEventListener("scroll", () => {
-        gutter.style.transform = `translateY(${-area.scrollTop}px)`;
-      });
-      this.area = area;
-      wrap.appendChild(area);
-    } else {
+    if (!this.editing) {
       const pre = document.createElement("pre");
       pre.className = "vfile hljs";
       highlightTo(pre, content, this.name);
       this.area = null;
+      this.hl = null;
       wrap.appendChild(pre);
+      this.body.replaceChildren(wrap);
+      return;
     }
 
+    // Two layers, one string. The `<pre>` is the colour and is inert; the
+    // textarea is the caret, the selection, undo, IME and every other thing a
+    // browser already does properly, with its own text painted transparent so
+    // only the layer underneath is seen.
+    const code = document.createElement("div");
+    code.className = "vcode";
+
+    const hl = document.createElement("pre");
+    hl.className = "vhl hljs";
+    hl.setAttribute("aria-hidden", "true");
+
+    const area = document.createElement("textarea");
+    area.className = "vedit";
+    area.spellcheck = false;
+    area.autocapitalize = "off";
+    area.autocomplete = "off";
+    area.setAttribute("autocorrect", "off");
+    area.value = content;
+    area.setAttribute("aria-label", `Edit ${this.name}`);
+
+    this.area = area;
+    this.hl = hl;
+
+    area.addEventListener("input", () => {
+      this.setGutter(area.value.split("\n").length);
+      this.scheduleHighlight();
+      // Length first: a keystroke almost always changes it, and comparing two
+      // lengths is free where comparing two megabyte strings is not.
+      const nowDirty =
+        area.value.length !== this.original.length || area.value !== this.original;
+      if (nowDirty !== this.dirty) {
+        this.dirty = nowDirty;
+        this.renderHead();
+      }
+    });
+
+    area.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void this.save();
+        return;
+      }
+      // Tab indents rather than leaving the editor. Leaving on Tab is correct
+      // for a form and wrong for a code editor, and this is a code editor.
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const { selectionStart: s, selectionEnd: t } = area;
+        area.setRangeText("  ", s, t, "end");
+        area.dispatchEvent(new Event("input"));
+        return;
+      }
+      // Everything else stays here: the terminal's key handler must not see
+      // typing meant for this box.
+      e.stopPropagation();
+    });
+
+    // One scroll position for three layers.
+    //
+    // Scrolled, not transformed. Both of the other layers are fixed-size boxes
+    // with their overflow hidden, so a transform moves the box itself off the
+    // screen and takes the text with it. Setting scrollTop moves the content
+    // inside the box, which is the thing that has to match.
+    area.addEventListener("scroll", () => {
+      hl.scrollTop = area.scrollTop;
+      hl.scrollLeft = area.scrollLeft;
+      gutter.scrollTop = area.scrollTop;
+    });
+
+    code.append(hl, area);
+    wrap.appendChild(code);
     this.body.replaceChildren(wrap);
+    this.scheduleHighlight();
   }
 
   private renderDiff(lines: DiffLine[]): void {

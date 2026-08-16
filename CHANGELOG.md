@@ -8,6 +8,22 @@ version carries everything else.
 
 ## [Unreleased]
 
+### Added
+- Every pane wears a title bar showing its name and status dot. Double-click it to rename the
+  pane, which pins the name so the shell stops changing it. The bar is also the drag handle,
+  replacing the grip that only appeared on hover. `pane_titles = false` under `[layout]`, or
+  the Settings toggle, gives the row back to the terminal.
+
+### Fixed
+- Dragging a file in from Finder landed it in whichever pane sat nearest the top-left corner
+  instead of the one under the cursor. The drop position is logical pixels on macOS, and it
+  was being scaled again as though it were physical.
+- Closing a zoomed pane with ⌘W offered to quit Marlin, and with a second tab open closed that
+  whole tab instead. A zoomed pane is the only one in the visible tree, and that was being read
+  as the tab being down to its last pane.
+- Closing a pane while a file or diff viewer was open left the closed pane in the layout the
+  viewer had stashed, so pressing Escape brought back a pane whose shell was already gone.
+
 ## [0.1.1] - 2026-08-16
 
 ### Added

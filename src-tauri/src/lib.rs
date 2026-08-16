@@ -2,7 +2,9 @@ mod config;
 mod fs;
 mod log;
 mod git;
-mod pty;
+// Public only so `src/bin/measure.rs` can measure the chunking on the hot path
+// without a copy of it that could drift from the real one.
+pub mod pty;
 mod update;
 
 use pty::Shared;
@@ -94,6 +96,16 @@ fn config_save(toml: String) -> Result<(), String> {
 #[tauri::command]
 fn config_path() -> String {
     config::path().to_string_lossy().to_string()
+}
+
+#[tauri::command]
+fn session_load() -> String {
+    config::session_load()
+}
+
+#[tauri::command]
+fn session_save(json: String) -> Result<(), String> {
+    config::session_save(&json).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -216,6 +228,8 @@ pub fn run() {
             config_load,
             config_save,
             config_path,
+            session_load,
+            session_save,
             fs_reveal,
             fs_open_default,
             fs_parent,

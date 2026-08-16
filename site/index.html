@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Marlin — a terminal built for running coding agents</title>
-<meta name="description" content="An open source terminal for running several coding agents at once. Splits that nest, vertical tabs, a git sidebar. No cloud, no account, no telemetry.">
+<meta name="description" content="A native, open-source terminal for running coding agents, with a git tree, diffs and syntax highlighting built in, so you read what an agent changed without leaving the terminal.">
 <meta property="og:title" content="Marlin">
-<meta property="og:description" content="A terminal built for running coding agents. No cloud, no account, no telemetry.">
+<meta property="og:description" content="The terminal where you read what your agents did. Native, open source, no account, no telemetry.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://marlin.gazar.dev">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230A0F16'/%3E%3Ctext x='50' y='68' font-size='58' font-family='monospace' font-weight='700' fill='%234C8DFF' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E">
@@ -125,6 +125,9 @@
                    padding:.95rem 1.1rem;width:34%;vertical-align:top;line-height:1.45}
   .sectbl tbody th::before{content:"✓";color:var(--grn);font-family:var(--mono);
                            margin-right:.6rem;font-weight:400}
+  /* The same table shape, without the promise. A tick belongs on a commitment,
+     and putting one beside "Linux: no package yet" would be the opposite of one. */
+  .sectbl.plain tbody th::before{content:none}
   .sectbl td{color:var(--dim);padding:.95rem 1.1rem;vertical-align:top;line-height:1.6}
   .sectbl tbody tr+tr th,.sectbl tbody tr+tr td{border-top:1px solid var(--line)}
   .sectbl code{font-size:.85em;color:var(--fg)}
@@ -274,14 +277,15 @@
 
 <header class="wrap">
   <div class="eyebrow">Open source terminal · MIT</div>
-  <h1>A terminal built for<br>running coding agents.</h1>
+  <h1>The terminal where you read<br>what your agents did.</h1>
   <p class="lede">You do not run one command and watch it any more. You run four agents in four
-  panes, and none of them finishes while you are looking. <strong>Marlin is built for that.</strong></p>
+  panes, and the real work is reading what they changed. <strong>That part happens here, without
+  leaving the terminal.</strong></p>
 
   <ul class="facts">
+    <li>Git tree, staging and conflicts</li>
+    <li>Unified and side-by-side diffs</li>
     <li>Splits that nest</li>
-    <li>Vertical tabs</li>
-    <li>Git staging in the sidebar</li>
     <li>No cloud, no account, no telemetry</li>
     <li>MIT</li>
   </ul>
@@ -357,11 +361,24 @@
     <div class="cell"><span class="k">Agents</span><h3>Status you can see</h3>
       <p>A dot per pane and per tab, driven by real shell marks rather than guesswork: running,
       finished, failed. A dot appears only when a pane knows something you do not.</p></div>
+    <div class="cell"><span class="k">Notifications</span><h3>Only when you looked away</h3>
+      <p>A long command that finished in a pane you were not watching. Notifying about anything
+      already on your screen is how a notification becomes noise, and noise gets muted.</p></div>
+    <div class="cell"><span class="k">Updates</span><h3>The button that tells you installs it</h3>
+      <p>Settings checks a static file, and the same button downloads the disk image, replaces the
+      app and relaunches. One GET, no identifiers, and it is listed in the table below.</p></div>
+    <div class="cell"><span class="k">Layout</span><h3>Panes move, and come back</h3>
+      <p>Drag a pane to an edge to move it there, to the middle to swap, to a tab to send it. Your
+      tabs, splits and directories are restored on the next launch, and a moved pane keeps the shell
+      it was already running.</p></div>
+    <div class="cell"><span class="k">Editing</span><h3>Click a file and type</h3>
+      <p>Files open ready to edit, highlighted while you type, with a gutter and ⌘S. A write is
+      refused if the file changed on disk since you opened it.</p></div>
   </div>
 </section>
 
 <section id="security" class="wrap">
-  <div class="head"><h2>Security, and what leaves your machine</h2><span class="note">Nothing does</span></div>
+  <div class="head"><h2>Security, and what leaves your machine</h2><span class="note">One request, and it is listed</span></div>
   <p>A terminal sees everything: your keys, your tokens, your employer's source. That makes the
   interesting question not what a terminal can do, but what it refuses to do. Marlin's answers are
   deliberate, and they are checkable, because the source is right there.</p>
@@ -379,6 +396,7 @@
       <tr><th scope="row">The webview is locked down</th><td>It can receive terminal output and move its own window. No filesystem, shell or network permission, and a content security policy that blocks outbound requests, so nothing the terminal prints can call home.</td></tr>
       <tr><th scope="row">Links open in your browser, and only http and https</th><td>A UI that can be navigated by something the terminal <em>printed</em> is a class of problem worth closing before it exists.</td></tr>
       <tr><th scope="row">Settings are a file you own</th><td><code>~/.config/marlin/marlin.toml</code>, plain text, editable by hand, safe to keep in a dotfiles repo.</td></tr>
+      <tr><th scope="row">The update check is the only thing that goes out</th><td>At most one GET a day to a static <code>version.json</code>, carrying no identifiers and no version query string, plus the disk image itself if you ask for it. Those are the only outbound requests Marlin makes, and there is no signature to verify on what comes back: TLS to the two hosts is the whole of what it trusts.</td></tr>
     </tbody>
   </table></div>
 
@@ -389,8 +407,43 @@
 </section>
 
 <section id="install" class="wrap">
-  <div class="head"><h2>Install</h2><span class="note">macOS · Apple silicon</span></div>
-  <div class="cols">
+  <div class="head"><h2>Install</h2><span class="note">macOS and Windows</span></div>
+  <p>From <a href="https://github.com/ehsangazar/marlin/releases">Releases</a>. Everything up to
+  and including 0.1.1 was built by hand on one Apple silicon Mac, so the only artefact that exists
+  today is an <code>aarch64</code> disk image. The table below is what 0.1.2 will ship, off build
+  machines that are not the author's.</p>
+
+  <div class="tblwrap" style="border-color:var(--line);background:rgba(255,255,255,.015)">
+    <table class="sectbl plain">
+    <thead><tr><th scope="col">You are on</th><th scope="col">What to take</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">macOS, Apple silicon or Intel</th>
+        <td>One universal disk image, both architectures in the same file.</td></tr>
+      <tr><th scope="row">Windows 10 or 11, x64</th>
+        <td>The <code>-setup.exe</code> installer. It installs for the current user, so there is no
+        admin prompt. An <code>.msi</code> is attached to the same release for anyone deploying it.</td></tr>
+      <tr><th scope="row">Linux</th>
+        <td>No package yet. It compiles and its tests run on every push, but nothing is built for
+        you to download, so it is a build from source or nothing.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p style="margin-top:1.3rem"><strong>Nothing is signed.</strong> There is no Apple Developer ID
+  and no Windows signing certificate, so macOS says the developer is unidentified and Windows shows
+  SmartScreen. That warning is accurate: nobody has paid a certificate authority to vouch for this
+  build. On macOS, right-click the app and choose Open, or run
+  <code>xattr -dr com.apple.quarantine /Applications/Marlin.app</code>. On Windows, choose
+  <strong>More info</strong>, then <strong>Run anyway</strong>.</p>
+
+  <p style="font-size:.86rem;color:var(--dim)"><strong>The Windows build is a pipeline, not yet a
+  fact.</strong> The release workflow that produces those installers, and that installs the Windows
+  one on a runner to check it starts, was written on 16 August 2026 and <strong>has not run
+  yet</strong>. Version 0.1.2 will be the first release through it. Even once it has, that check
+  proves the installer works and the process starts, not that the window renders or that typing
+  does: nobody has sat in front of Marlin on Windows. Say so in an issue if it misbehaves; it is a
+  bug, not a known limitation.</p>
+
+  <div class="cols" style="margin-top:1.7rem">
     <div>
       <h3 style="font-size:.95rem;margin-bottom:.6rem">From source</h3>
       <pre><span class="p">$</span> git clone https://github.com/ehsangazar/marlin
@@ -398,34 +451,48 @@
 <span class="p">$</span> pnpm install
 <span class="p">$</span> pnpm tauri build</pre>
       <p style="font-size:.85rem;color:var(--dim)">Needs Node, pnpm and a stable Rust toolchain.
-      The app lands in <code>src-tauri/target/release/bundle</code>.</p>
+      The app lands in <code>src-tauri/target/release/bundle</code>, and building it yourself avoids
+      the signing warnings entirely.</p>
     </div>
     <div>
       <h3 style="font-size:.95rem;margin-bottom:.6rem">Shell integration</h3>
-      <pre><span class="c"># zsh</span>
-<span class="p">$</span> echo 'source ~/path/to/marlin/shell/marlin.zsh' >> ~/.zshrc
+      <pre><span class="c"># zsh, from the installed app</span>
+<span class="p">$</span> echo 'source "/Applications/Marlin.app/Contents\
+/Resources/shell/marlin.zsh"' >> ~/.zshrc
 
-<span class="c"># fish</span>
-<span class="p">$</span> echo 'source ~/path/to/marlin/shell/marlin.fish' \
-    >> ~/.config/fish/config.fish</pre>
-      <p style="font-size:.85rem;color:var(--dim)">Optional. It emits standard prompt marks so the
-      status dots and directory tracking work. Without it you get a working terminal with no dots,
-      which is degraded rather than broken.</p>
+<span class="c"># or from a clone, run in the repository</span>
+<span class="p">$</span> echo "source $PWD/shell/marlin.zsh" >> ~/.zshrc</pre>
+      <p style="font-size:.85rem;color:var(--dim)">Optional, and the hooks ship inside the app so
+      there is nothing to download. It emits standard prompt marks so the status dots and directory
+      tracking work. Without it you get a working terminal with no dots, which is degraded rather
+      than broken.</p>
     </div>
   </div>
 </section>
 
 <section id="gaps" class="wrap">
-  <div class="head"><h2>Not done yet</h2><span class="note">Listed because a page of only wins is a sales page</span></div>
+  <div class="head"><h2>Not done yet</h2><span class="note">Kept honest in both directions</span></div>
   <ul class="gaps">
-    <li><b>Nothing is measured.</b> No latency, throughput or memory figures exist. That is the next
-      real piece of work, and until it is done this page claims no speed.</li>
-    <li><b>No desktop notifications</b> yet, and <b>no updater</b>.</li>
+    <li><b>Keystroke-to-pixel is still unmeasured.</b> There are now real numbers for the part Rust
+      owns, reproducible in one command, and none at all for VT parsing, the grid and the renderer.
+      That last part is the one you feel, so this page still claims no speed.</li>
+    <li><b>The numbers are one laptop.</b> Nothing tracks them over time and nothing fails when they
+      regress.</li>
     <li><b>Builds are unsigned</b>, so macOS will complain about an unidentified developer.</li>
-    <li><b>Linux and Windows are untested.</b> The stack is cross-platform; the testing is not.</li>
-    <li><b>No pane drag-and-drop</b>, and the settings panel does not expose everything the config
-      file can hold.</li>
+    <li><b>The cross-platform pipeline has never run.</b> Both workflows were written on 16 August
+      and no push or tag has been through either, so "tested on three platforms" is a file on a disk
+      until 0.1.2 proves otherwise. Nobody has sat in front of Marlin on Windows, and Linux is
+      compiled but never packaged.</li>
+    <li><b>A restored session is a layout, not a session.</b> Tabs, splits and directories come back.
+      Scrollback and what was running do not, and faking that would be worse than an empty prompt in
+      the right place.</li>
+    <li><b>The editor is a textarea.</b> Highlighting, a gutter and a save that refuses if the file
+      moved under you, but no multiple cursors and no highlighting above 400KB.</li>
   </ul>
+  <p style="margin-top:1.3rem;font-size:.86rem;color:var(--dim)">Eleven items that used to be on this
+  list have been built and were taken off it, most recently session restore, panes you can move, and
+  the measurement harness that rewrote the first two lines above. A stale gap list flatters you
+  exactly as much as no gap list at all.</p>
 </section>
 
 <section class="wrap">

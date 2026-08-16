@@ -1,6 +1,10 @@
 # Marlin shell integration for fish.
 #
-#   echo 'source ~/Projects/merge/marlin/shell/marlin.fish' >> ~/.config/fish/config.fish
+#   echo 'source "/Applications/Marlin.app/Contents/Resources/shell/marlin.fish"' >> ~/.config/fish/config.fish
+#
+# or, from a clone:
+#
+#   echo "source $PWD/shell/marlin.fish" >> ~/.config/fish/config.fish
 
 if set -q MARLIN_SHELL_INTEGRATION
     exit

@@ -2,7 +2,7 @@ import "@xterm/xterm/css/xterm.css";
 import "./style.css";
 
 import { listen } from "@tauri-apps/api/event";
-import { Pane } from "./pane";
+import { DOT_TIP, Pane } from "./pane";
 import {
   findLeaf,
   leaf,
@@ -20,6 +20,7 @@ import { Viewer, type DiffMode } from "./viewer";
 import { Palette, type Command } from "./palette";
 import { Settings, themeByName } from "./settings";
 import { load as loadConfig, save as saveConfig, DEFAULTS, type Config } from "./config";
+import { load as loadSession, save as saveSession, rebuild as rebuildSession } from "./session";
 import { Find } from "./find";
 import { menu } from "./menu";
 import { ask, confirm } from "./prompt";
@@ -58,6 +59,7 @@ const els = {
   stBar: document.getElementById("st-bar") as HTMLSpanElement,
   main: document.querySelector(".main") as HTMLDivElement,
   tree: document.getElementById("tree") as HTMLElement,
+  treegrip: document.getElementById("treegrip") as HTMLDivElement,
 };
 
 let sidebar: Sidebar;
@@ -87,11 +89,6 @@ function paneByPty(id: number): Pane | undefined {
  * anything.
  */
 const RANK: Record<string, number> = { err: 3, run: 1, ok: 0 };
-const DOT_TIP: Record<string, string> = {
-  run: "running",
-  ok: "finished cleanly",
-  err: "last command failed",
-};
 
 function tabStatus(t: Tab): string | null {
   let best: string | null = null;
@@ -114,6 +111,7 @@ function tabLabel(t: Tab): string {
 
 function refreshChrome(): void {
   els.title.textContent = app.focused?.name ?? "";
+  for (const p of allPanes()) p.syncHead();
   els.stTheme.textContent = app.theme.name;
   els.stTabs.textContent = String(app.tabs.length);
   els.stBar.textContent =
@@ -198,14 +196,28 @@ function renderTabs(): void {
       b.classList.remove("drag");
     });
     b.addEventListener("dragover", (e) => {
+      // The tab bar takes two kinds of drag: a tab being reordered, and a pane
+      // being sent to another tab.
+      if (dragPane) {
+        if (i === app.active) return;
+        e.preventDefault();
+        b.classList.add("dragtarget");
+        return;
+      }
       if (dragTab === null || dragTab === i) return;
       e.preventDefault();
       b.classList.add("over");
     });
-    b.addEventListener("dragleave", () => b.classList.remove("over"));
+    b.addEventListener("dragleave", () => b.classList.remove("over", "dragtarget"));
     b.addEventListener("drop", (e) => {
       e.preventDefault();
-      b.classList.remove("over");
+      b.classList.remove("over", "dragtarget");
+      if (dragPane) {
+        const moving = dragPane;
+        dragPane = null;
+        movePaneToTab(moving, i);
+        return;
+      }
       if (dragTab === null || dragTab === i) return;
       const moved = app.tabs.splice(dragTab, 1)[0];
       if (moved) app.tabs.splice(i, 0, moved);
@@ -241,6 +253,24 @@ function render(): void {
     for (const l of leaves(curTab().root)) l.pane.resize();
   });
   refreshChrome();
+  markSession();
+}
+
+/**
+ * Every layout change ends in render(), so the session save hangs off it rather
+ * than off the twenty places that mutate the tree. Debounced, because dragging
+ * a split is dozens of renders and one decision.
+ *
+ * Suppressed until the restore has finished: a save that fires while the tree
+ * is half-rebuilt would overwrite the session with the part of it that had been
+ * restored so far.
+ */
+let sessionTimer = 0;
+let sessionReady = false;
+function markSession(): void {
+  if (!sessionReady) return;
+  clearTimeout(sessionTimer);
+  sessionTimer = window.setTimeout(() => void saveSession(app.tabs, app.active), 500);
 }
 
 function focusPane(p: Surface): void {
@@ -256,6 +286,103 @@ function focusPane(p: Surface): void {
   refreshChrome();
 }
 
+/**
+ * Which part of a pane the cursor is over, as a drop target.
+ *
+ * A quarter of the width at each edge, and everything else is a swap. Edge
+ * bands any narrower turn "put it on the right" into a game of aim, and a pane
+ * is not a small target you should have to be precise about.
+ */
+const ZONES = ["left", "right", "top", "bottom", "swap"] as const;
+type Zone = (typeof ZONES)[number];
+
+function zoneAt(el: HTMLElement, x: number, y: number): Zone {
+  const r = el.getBoundingClientRect();
+  const fx = (x - r.left) / r.width;
+  const fy = (y - r.top) / r.height;
+  // The nearest edge wins, so a corner resolves to whichever it is closer to
+  // rather than to whichever branch happens to be tested first.
+  const d: [Zone, number][] = [
+    ["left", fx],
+    ["right", 1 - fx],
+    ["top", fy],
+    ["bottom", 1 - fy],
+  ];
+  d.sort((a, b) => a[1] - b[1]);
+  const [zone, dist] = d[0] as [Zone, number];
+  return dist < 0.25 ? zone : "swap";
+}
+
+function clearZone(el: HTMLElement): void {
+  el.classList.remove("dragover", ...ZONES.map((z) => `zone-${z}`));
+}
+
+function clearZones(): void {
+  for (const p of allPanes()) clearZone(p.el);
+  for (const el of els.tabbar.querySelectorAll(".dragtarget")) el.classList.remove("dragtarget");
+}
+
+/** Two panes trade places inside their leaves; the tree does not change. */
+function swapPanes(a: Surface, b: Surface): void {
+  const tab = curTab();
+  const la = findLeaf(tab.root, a);
+  const lb = findLeaf(tab.root, b);
+  if (!la || !lb) return;
+  const tmp = la.pane;
+  la.pane = lb.pane;
+  lb.pane = tmp;
+  render();
+  focusPane(b);
+}
+
+/**
+ * Move a pane to one side of another, splitting the target.
+ *
+ * Detach first, then insert: doing it the other way round means the tree
+ * briefly holds the same leaf twice, and `removeNode` would then take out the
+ * copy we had just placed.
+ */
+function movePane(src: Surface, dst: Surface, zone: Zone): void {
+  const tab = curTab();
+  const from = findLeaf(tab.root, src);
+  const to = findLeaf(tab.root, dst);
+  if (!from || !to || from === to) return;
+
+  const without = removeNode(tab.root, from);
+  if (!without) return;
+  const dir = zone === "left" || zone === "right" ? "row" : "col";
+  const first = zone === "left" || zone === "top";
+  tab.root = replaceNode(without, to, split(dir, first ? from : to, first ? to : from));
+  render();
+  focusPane(src);
+}
+
+/**
+ * Drop a pane on a tab to send it there.
+ *
+ * The pane arrives beside everything already in that tab rather than inside
+ * some particular corner of it, because the drop said which tab, not where.
+ */
+function movePaneToTab(src: Surface, target: number): void {
+  const tab = curTab();
+  const dest = app.tabs[target];
+  if (!dest || dest === tab) return;
+  const from = findLeaf(tab.root, src);
+  if (!from) return;
+
+  const without = removeNode(tab.root, from);
+  if (!without) {
+    // It was the only pane in its tab, so the tab goes with it.
+    app.tabs.splice(app.tabs.indexOf(tab), 1);
+    if (app.active >= app.tabs.length) app.active = app.tabs.length - 1;
+  } else {
+    tab.root = without;
+  }
+  dest.root = split("row", dest.root, from);
+  selectTab(app.tabs.indexOf(dest));
+  focusPane(src);
+}
+
 async function makePane(): Promise<Pane> {
   const pane = new Pane(
     app.theme,
@@ -265,6 +392,9 @@ async function makePane(): Promise<Pane> {
         void sidebar.setCwd(p.cwd);
         palette.setRoot(p.cwd);
       }
+      // A `cd` changes the session without changing the layout, and the
+      // directory is half of what the session is for.
+      markSession();
     },
     () => refreshChrome(),
   );
@@ -279,45 +409,52 @@ async function makePane(): Promise<Pane> {
   };
   pane.el.addEventListener("mousedown", () => focusPane(pane));
 
-  // Drag a pane onto another to swap them. The panes swap inside their leaves
-  // rather than the tree being rebuilt, so both terminals keep their scrollback
-  // and their pty: moving a pane must not restart a shell.
-  // A grip, not the whole pane: making the terminal itself draggable would eat
-  // text selection, which is the most-used gesture in a terminal.
-  const grip = document.createElement("div");
-  grip.className = "pgrip";
-  grip.title = "Drag to swap with another pane";
+  // Drag a pane onto another. The edge you drop on decides what happens: the
+  // middle swaps the two, an edge moves the dragged pane to that side and
+  // splits. Either way the pane objects are moved, never rebuilt, so both
+  // terminals keep their scrollback and their pty: moving a pane must not
+  // restart a shell.
+  // The title bar, not the whole pane: making the terminal itself draggable
+  // would eat text selection, which is the most-used gesture in a terminal.
+  const grip = pane.head;
+  grip.title = "Double-click to rename. Drag to an edge to move it there, or to the middle to swap.";
   grip.draggable = true;
-  pane.el.appendChild(grip);
+  grip.addEventListener("dblclick", (e) => {
+    // The pane is already focused: the mousedown above got there first.
+    e.preventDefault();
+    void renameFocused(false);
+  });
   grip.addEventListener("dragstart", (e) => {
     dragPane = pane;
     e.dataTransfer?.setData("text/plain", "pane");
+    e.dataTransfer!.effectAllowed = "move";
     pane.el.classList.add("drag");
   });
   grip.addEventListener("dragend", () => {
     dragPane = null;
     pane.el.classList.remove("drag");
+    clearZones();
   });
   pane.el.addEventListener("dragover", (e) => {
     if (!dragPane || dragPane === pane) return;
     e.preventDefault();
+    const zone = zoneAt(pane.el, e.clientX, e.clientY);
     pane.el.classList.add("dragover");
+    for (const z of ZONES) pane.el.classList.toggle(`zone-${z}`, z === zone);
   });
-  pane.el.addEventListener("dragleave", () => pane.el.classList.remove("dragover"));
+  pane.el.addEventListener("dragleave", (e) => {
+    // Crossing onto a child element fires dragleave on the parent, which would
+    // strobe the overlay off and on for the whole drag.
+    if (pane.el.contains(e.relatedTarget as globalThis.Node | null)) return;
+    clearZone(pane.el);
+  });
   pane.el.addEventListener("drop", (e) => {
     e.preventDefault();
-    pane.el.classList.remove("dragover");
+    const zone = zoneAt(pane.el, e.clientX, e.clientY);
+    clearZone(pane.el);
     if (!dragPane || dragPane === pane) return;
-    const tab = curTab();
-    const a = findLeaf(tab.root, dragPane);
-    const b = findLeaf(tab.root, pane);
-    if (a && b) {
-      const tmp = a.pane;
-      a.pane = b.pane;
-      b.pane = tmp;
-      render();
-      focusPane(pane);
-    }
+    if (zone === "swap") swapPanes(dragPane, pane);
+    else movePane(dragPane, pane, zone);
     dragPane = null;
   });
   pane.el.addEventListener("contextmenu", (e) => {
@@ -448,12 +585,27 @@ async function confirmQuit(reason: string): Promise<void> {
     ok: "Quit",
     danger: true,
   });
-  if (ok) await invoke("quit_app").catch(() => {});
+  if (!ok) return;
+  // Flush rather than trust the debounce: quitting is exactly the moment a
+  // pending save has no later chance to run.
+  clearTimeout(sessionTimer);
+  await saveSession(app.tabs, app.active);
+  await invoke("quit_app").catch(() => {});
 }
 
 function closeFocused(): void {
   const tab = curTab();
   if (!app.focused) return;
+
+  // A zoomed pane is the only leaf in the tree, but the tab is not down to one
+  // pane: the rest are parked in the stash. Counting the visible tree read a
+  // zoom as the last pane, so Cmd+W offered to quit the whole app over a tab
+  // that still had panes in it. Unzoom first and the count is the real one.
+  if (tab.zoomStash) {
+    tab.root = tab.zoomStash;
+    tab.zoomStash = null;
+  }
+
   const target = findLeaf(tab.root, app.focused);
   if (!target) return;
 
@@ -470,6 +622,12 @@ function closeFocused(): void {
   const next = removeNode(tab.root, target);
   if (!next) return;
   tab.root = next;
+  // A viewer keeps the pre-viewer tree for Escape to put back. The closed pane
+  // has to come out of that copy too, or Escape restores a disposed one.
+  if (tab.viewStash) {
+    const stashed = findLeaf(tab.viewStash, target.pane);
+    if (stashed) tab.viewStash = removeNode(tab.viewStash, stashed) ?? tab.viewStash;
+  }
   const first = leaves(tab.root)[0];
   if (first) app.focused = first.pane;
   render();
@@ -510,6 +668,26 @@ function termAt(x: number, y: number): Pane | null {
 }
 
 /**
+ * Where a drop landed, in the CSS pixels the DOM is asked about.
+ *
+ * Tauri types the position as physical, but only Windows reports it that way:
+ * wry reads a macOS drop out of `draggingLocation` and a GTK one out of the
+ * widget's own coordinates, and both of those are already logical. Scaling
+ * those again halves the point on a retina display, which is what sent every
+ * drop to whichever pane sits nearest the top-left corner. The bounds check
+ * covers the other direction, so a runtime that starts reporting true physical
+ * pixels still lands in the pane under the cursor.
+ */
+function dropPoint(pos: { x: number; y: number }): { x: number; y: number } {
+  const r = window.devicePixelRatio || 1;
+  const physical =
+    navigator.userAgent.includes("Windows") ||
+    pos.x > window.innerWidth ||
+    pos.y > window.innerHeight;
+  return physical ? { x: pos.x / r, y: pos.y / r } : pos;
+}
+
+/**
  * Files dragged in from Finder never reach the pane handlers above: Tauri
  * intercepts an OS-level drop before the webview sees a `drop` event, so
  * without this the drag lands nowhere and the path has to be pasted by hand.
@@ -529,9 +707,8 @@ async function wireFileDrop(): Promise<void> {
     .onDragDropEvent((e) => {
       const ev = e.payload;
       if (ev.type === "leave") return highlight(null);
-      // Drop positions arrive in physical pixels; the DOM answers in CSS ones.
-      const r = window.devicePixelRatio || 1;
-      const over = termAt(ev.position.x / r, ev.position.y / r);
+      const pt = dropPoint(ev.position);
+      const over = termAt(pt.x, pt.y);
       if (ev.type !== "drop") return highlight(over);
       highlight(null);
       // Dropping on a viewer, or on chrome, still means the pane you are
@@ -568,6 +745,62 @@ function selectTab(i: number): void {
   app.focused = first ? first.pane : null;
   render();
   if (app.focused) focusPane(app.focused);
+}
+
+/**
+ * Put the last layout back, or report that there was not one.
+ *
+ * Panes are opened after the whole tree is in the DOM, because a pty is spawned
+ * with the size of the element it lands in: opening as we build would give every
+ * pane the size of the window it was briefly alone in, and the shell would be
+ * told the wrong `COLUMNS` before the first prompt was drawn.
+ *
+ * A directory that no longer exists is not an error worth surfacing. The pane
+ * opens at home, which is what a shell does anyway.
+ */
+async function restoreSession(): Promise<boolean> {
+  const saved = await loadSession();
+  if (!saved) return false;
+
+  const opening: Pane[] = [];
+  try {
+    for (const t of saved.tabs) {
+      const root = await rebuildSession(
+        t.root,
+        async (cwd, name, pinned) => {
+          const pane = await makePane();
+          pane.startCwd = cwd || null;
+          if (pinned && name) {
+            pane.name = name;
+            pane.pinned = true;
+          }
+          opening.push(pane);
+          return leaf(pane);
+        },
+        (dir, a, b, ratio) => {
+          const s = split(dir, a, b);
+          if (ratio) s.ratio = ratio;
+          return s;
+        },
+      );
+      app.tabs.push({ name: t.name, pinned: t.pinned, root });
+    }
+  } catch {
+    // A tree that will not rebuild is a tree we do not start from.
+    for (const p of opening) p.dispose();
+    app.tabs.length = 0;
+    return false;
+  }
+
+  if (!app.tabs.length) return false;
+  app.active = Math.min(saved.active, app.tabs.length - 1);
+  const first = leaves(curTab().root)[0]?.pane ?? null;
+  app.focused = first;
+  render();
+  for (const p of opening) await p.open();
+  if (first) focusPane(first);
+  render();
+  return true;
 }
 
 async function newTab(): Promise<void> {
@@ -775,6 +1008,73 @@ function toggleTree(): void {
 }
 
 /** Applied everywhere at once: panes, chrome, tab bar and the tree. */
+/**
+ * The explorer's width, clamped so a drag can never take the terminal away.
+ *
+ * The ceiling is measured against the window rather than fixed, because the
+ * point of a wide tree is a wide display, and a hard 520 would be wrong on both
+ * a laptop and a 6K panel.
+ */
+const TREE_MIN = 140;
+const treeMax = () => Math.max(TREE_MIN, Math.min(640, window.innerWidth - 320));
+
+function setTreeWidth(px: number): void {
+  const w = Math.round(Math.min(treeMax(), Math.max(TREE_MIN, px || DEFAULTS.treeWidth)));
+  els.main.style.setProperty("--tree-w", `${w}px`);
+}
+
+/**
+ * Drag the border between the tree and the panes.
+ *
+ * Pointer capture rather than window listeners: a drag that leaves the window,
+ * or ends over a terminal that would rather have the mouse, still ends here.
+ * The width is written to the config on release, not on every move, because a
+ * drag is one decision and it should be one line rewritten in the file.
+ */
+function wireTreeResize(): void {
+  let raf = 0;
+  els.treegrip.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    els.treegrip.setPointerCapture(e.pointerId);
+    els.treegrip.classList.add("on");
+    document.body.classList.add("resizing");
+    const left = els.tree.getBoundingClientRect().left;
+
+    const move = (ev: PointerEvent) => {
+      setTreeWidth(ev.clientX - left);
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        for (const p of allPanes()) p.resize();
+      });
+    };
+    const up = () => {
+      els.treegrip.removeEventListener("pointermove", move);
+      els.treegrip.removeEventListener("pointerup", up);
+      els.treegrip.removeEventListener("pointercancel", up);
+      els.treegrip.classList.remove("on");
+      document.body.classList.remove("resizing");
+      const w = parseInt(els.main.style.getPropertyValue("--tree-w"), 10);
+      if (Number.isFinite(w) && w !== cfg.treeWidth) {
+        cfg = { ...cfg, treeWidth: w };
+        settings.sync(cfg);
+        void saveConfig(cfg);
+      }
+      for (const p of allPanes()) p.resize();
+    };
+    els.treegrip.addEventListener("pointermove", move);
+    els.treegrip.addEventListener("pointerup", up);
+    els.treegrip.addEventListener("pointercancel", up);
+  });
+
+  // Double-click is the way back: a dragged panel with no reset is a panel you
+  // can put somewhere you cannot undo.
+  els.treegrip.addEventListener("dblclick", () => {
+    applyConfig({ ...cfg, treeWidth: DEFAULTS.treeWidth });
+    void saveConfig(cfg);
+  });
+}
+
 function applyConfig(next: Config): void {
   cfg = next;
   setTheme(themeByName(cfg.theme));
@@ -785,8 +1085,10 @@ function applyConfig(next: Config): void {
     p.term.options.cursorBlink = cfg.cursorBlink;
     p.term.options.scrollback = cfg.scrollback;
   }
+  els.panes.classList.toggle("noheads", !cfg.paneTitles);
   app.tree = cfg.fileTree;
   els.main.classList.toggle("notree", !app.tree);
+  setTreeWidth(cfg.treeWidth);
   app.bar = cfg.tabBar === "top" ? "h" : cfg.tabBar === "side" ? "v" : "hidden";
   applyBar();
   app.diffMode = cfg.diffView;
@@ -828,6 +1130,7 @@ async function boot(): Promise<void> {
   });
 
   applyBar();
+  wireTreeResize();
   await wireFileDrop();
 
   // The webview brings its own context menu. Suppressing it globally, once, is
@@ -997,13 +1300,16 @@ async function boot(): Promise<void> {
   settings.sync(cfg);
   applyConfig(cfg);
 
-  const first = await makePane();
-  app.tabs.push({ name: "", pinned: false, root: leaf(first) });
-  app.focused = first;
-  render();
-  await first.open();
-  focusPane(first);
-  render();
+  if (!(await restoreSession())) {
+    const first = await makePane();
+    app.tabs.push({ name: "", pinned: false, root: leaf(first) });
+    app.focused = first;
+    render();
+    await first.open();
+    focusPane(first);
+    render();
+  }
+  sessionReady = true;
 
   // Debounced to a frame: xterm reflow is not free and a window drag fires
   // dozens of these a second.

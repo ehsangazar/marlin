@@ -295,7 +295,21 @@ export class Settings {
       ),
     );
     body.appendChild(
+      this.row(
+        "Pane titles",
+        "one row per pane, to name it and to drag it by",
+        this.toggle(c.paneTitles, () => this.commit({ paneTitles: !c.paneTitles })),
+      ),
+    );
+    body.appendChild(
       this.row("File tree", null, this.toggle(c.fileTree, () => this.commit({ fileTree: !c.fileTree }))),
+    );
+    body.appendChild(
+      this.row(
+        "Explorer width",
+        "or drag its edge, and double-click the edge to put it back",
+        this.num(c.treeWidth, 140, 640, 4, (v) => this.commit({ treeWidth: v })),
+      ),
     );
     body.appendChild(
       this.row(

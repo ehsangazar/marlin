@@ -1,6 +1,10 @@
 # Marlin shell integration for zsh.
 #
-#   echo 'source ~/Projects/merge/marlin/shell/marlin.zsh' >> ~/.zshrc
+#   echo 'source "/Applications/Marlin.app/Contents/Resources/shell/marlin.zsh"' >> ~/.zshrc
+#
+# or, from a clone:
+#
+#   echo "source $PWD/shell/marlin.zsh" >> ~/.zshrc
 #
 # Emits the standard semantic prompt marks (OSC 133) and the working directory
 # (OSC 7). Marlin reads these; it never parses your command line. That division

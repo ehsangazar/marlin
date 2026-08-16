@@ -31,6 +31,26 @@ pub struct Output {
     pub data: String,
 }
 
+/// How much of `buf` is complete UTF-8.
+///
+/// A chunk boundary can land inside a multi-byte character, and lossy
+/// conversion would turn it into a replacement character that never recovers.
+/// The incomplete tail is at most three bytes and is held for the next round.
+///
+/// Genuinely invalid bytes are a different case and are passed through to be
+/// replaced: a shell that emits broken UTF-8 must not be able to stall the
+/// stream behind a tail that will never be completed.
+///
+/// Extracted rather than inline so it can be tested and measured. It runs on
+/// every chunk the shell produces, which is the hottest path in the app.
+pub fn valid_prefix(buf: &[u8]) -> usize {
+    match std::str::from_utf8(buf) {
+        Ok(_) => buf.len(),
+        Err(e) if e.error_len().is_none() => e.valid_up_to(),
+        Err(_) => buf.len(),
+    }
+}
+
 impl Ptys {
     pub fn spawn(
         &self,
@@ -124,15 +144,7 @@ impl Ptys {
                         Err(_) => break,
                     }
                 }
-                // A chunk boundary can land inside a multi-byte character, and
-                // lossy conversion would turn it into a replacement character
-                // that never recovers. Hold the incomplete tail (at most three
-                // bytes) for the next round instead.
-                let good = match std::str::from_utf8(&pending) {
-                    Ok(_) => pending.len(),
-                    Err(e) if e.error_len().is_none() => e.valid_up_to(),
-                    Err(_) => pending.len(),
-                };
+                let good = valid_prefix(&pending);
                 carry.extend_from_slice(&pending[good..]);
                 if good == 0 {
                     continue;
@@ -172,3 +184,52 @@ impl Ptys {
 }
 
 pub type Shared = Arc<Ptys>;
+
+#[cfg(test)]
+mod tests {
+    use super::valid_prefix;
+
+    #[test]
+    fn passes_complete_utf8_through_whole() {
+        assert_eq!(valid_prefix(b"plain ascii"), 11);
+        let s = "coloured ✓ output ⣾".as_bytes();
+        assert_eq!(valid_prefix(s), s.len());
+    }
+
+    #[test]
+    fn holds_back_a_split_character() {
+        // "✓" is three bytes; a chunk that ends one byte short must keep them.
+        let full = "ok ✓".as_bytes();
+        let cut = &full[..full.len() - 1];
+        assert_eq!(valid_prefix(cut), 3, "only \"ok \" is complete");
+    }
+
+    #[test]
+    fn a_split_character_survives_being_rejoined() {
+        let full = "ok ✓".as_bytes();
+        let (head, tail) = full.split_at(full.len() - 2);
+        let good = valid_prefix(head);
+        let mut carry = head[good..].to_vec();
+        carry.extend_from_slice(tail);
+        assert_eq!(
+            format!(
+                "{}{}",
+                std::str::from_utf8(&head[..good]).unwrap(),
+                std::str::from_utf8(&carry).unwrap()
+            ),
+            "ok ✓"
+        );
+    }
+
+    /// The stall case: bytes that are not the start of any valid sequence must
+    /// be emitted, not held forever waiting for a completion that cannot come.
+    #[test]
+    fn does_not_stall_on_bytes_that_can_never_be_valid() {
+        assert_eq!(valid_prefix(&[0x41, 0xC0, 0xC0, 0x42]), 4);
+    }
+
+    #[test]
+    fn an_empty_chunk_is_not_a_special_case() {
+        assert_eq!(valid_prefix(b""), 0);
+    }
+}

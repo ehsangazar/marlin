@@ -7,6 +7,14 @@ import type { MarlinTheme } from "./theme";
 
 export type PaneStatus = "run" | "ok" | "err" | "wait" | "paused" | null;
 
+/** What a status dot means, in the one place both the tab bar and the pane
+ *  title bar can read it from. */
+export const DOT_TIP: Record<string, string> = {
+  run: "running",
+  ok: "finished cleanly",
+  err: "last command failed",
+};
+
 let uid = 0;
 
 /**
@@ -19,7 +27,16 @@ let uid = 0;
 export class Pane {
   readonly key = ++uid;
   readonly el: HTMLDivElement;
+  /** The pane's own title bar: what it is called, what it is doing, and the
+   *  handle it is dragged by. */
+  readonly head: HTMLDivElement;
+  /** The terminal's own box. xterm's fit addon sizes itself against whatever it
+   *  was opened in, so it cannot be opened straight into `el`: it would measure
+   *  the title bar as terminal and ask the pty for a row that isn't there. */
+  readonly body: HTMLDivElement;
   readonly term: Terminal;
+  private readonly dot: HTMLSpanElement;
+  private readonly label: HTMLSpanElement;
 
   name = "shell";
   /** Set by hand pins the name and stops the shell overwriting it. */
@@ -54,6 +71,18 @@ export class Pane {
     this.el = document.createElement("div");
     this.el.className = "pane-term";
 
+    this.head = document.createElement("div");
+    this.head.className = "phead";
+    this.dot = document.createElement("span");
+    this.dot.className = "sdot";
+    this.label = document.createElement("span");
+    this.label.className = "pname";
+    this.head.append(this.dot, this.label);
+    this.body = document.createElement("div");
+    this.body.className = "pbody";
+    this.el.append(this.head, this.body);
+    this.syncHead();
+
     this.term = new Terminal({
       allowProposedApi: true,
       fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
@@ -73,9 +102,22 @@ export class Pane {
     this.term.loadAddon(this.search);
   }
 
+  /**
+   * Put the current name and status on the title bar.
+   *
+   * Text and classes only, never a rebuild: this runs on every status change,
+   * and replacing the nodes would drop the drag and rename handlers that
+   * main.ts hangs off them.
+   */
+  syncHead(): void {
+    this.dot.className = `sdot${this.status ? ` ${this.status}` : ""}`;
+    this.dot.title = (this.status && DOT_TIP[this.status]) ?? "";
+    this.label.textContent = this.name;
+  }
+
   /** Must run after the element is in the DOM: WebGL needs a real canvas size. */
   async open(): Promise<void> {
-    this.term.open(this.el);
+    this.term.open(this.body);
     try {
       this.webgl = new WebglAddon();
       this.webgl.onContextLoss(() => {
@@ -186,7 +228,7 @@ export class Pane {
    *  the cell width and a hidden pane yields a nonsense column count that then
    *  gets sent to the pty. */
   private refit(): void {
-    if (this.el.clientWidth < 24 || this.el.clientHeight < 24) return;
+    if (this.body.clientWidth < 24 || this.body.clientHeight < 24) return;
     try {
       this.fit.fit();
     } catch {
