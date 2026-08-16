@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Marlin needs very little: events to carry pty output to the grid, and window controls because the native title bar is hidden. Nothing here opens the filesystem or the network to the webview.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:event:default",
@@ -12,6 +14,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-internal-toggle-maximize",
     "core:window:allow-set-title",
-    "core:app:default"
+    "core:app:default",
+    "notification:default"
   ]
 }

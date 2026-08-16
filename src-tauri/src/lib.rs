@@ -1,3 +1,4 @@
+mod config;
 mod fs;
 mod git;
 mod pty;
@@ -28,6 +29,21 @@ fn fs_walk(path: String) -> Vec<fs::Entry> {
 #[tauri::command]
 fn fs_grep(path: String, query: String) -> Vec<fs::Hit> {
     fs::grep(&path, &query, 200)
+}
+
+#[tauri::command]
+fn config_load() -> String {
+    config::load()
+}
+
+#[tauri::command]
+fn config_save(toml: String) -> Result<(), String> {
+    config::save(&toml).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn config_path() -> String {
+    config::path().to_string_lossy().to_string()
 }
 
 #[tauri::command]
@@ -97,6 +113,7 @@ fn pty_close(state: State<'_, Shared>, id: u32) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             app.manage(Shared::default());
             Ok(())
@@ -111,6 +128,9 @@ pub fn run() {
             fs_detect,
             fs_walk,
             fs_grep,
+            config_load,
+            config_save,
+            config_path,
             fs_home,
             fs_display,
             git_status,

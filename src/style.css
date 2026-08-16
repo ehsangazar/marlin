@@ -245,3 +245,37 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .tab.drag { opacity:.35; }
 .tab.over { box-shadow:inset 2px 0 0 var(--m-vio); }
 .pane-term.dragover { outline:2px dashed var(--m-vio); outline-offset:-3px; }
+
+/* A tab needs to be keyboard-reachable without wearing the browser's focus
+   ring, which reads as a rendering bug rather than as focus. */
+.tab:focus { outline: none; }
+.tab:focus-visible { box-shadow: inset 0 0 0 1px var(--m-acc); }
+.trow:focus, .tsec:focus { outline: none; }
+
+/* The empty run of the tab bar is a target, so it needs to fill the axis. */
+.body.h .tabbar { min-height:30px; }
+.body.v .tabbar { min-height:0; }
+
+/* File viewer: gutter plus a small highlighter. */
+.vfilewrap { display:flex; align-items:flex-start; }
+.vgutter { margin:0; padding:.45rem .5rem .45rem .6rem; font-size:.72rem; line-height:1.5;
+           color:var(--m-dim); opacity:.55; text-align:right; user-select:none;
+           border-right:1px solid var(--m-line); white-space:pre; }
+.vfile { flex:1; }
+.hl-com { color:var(--m-dim); font-style:italic; }
+.hl-str { color:var(--m-grn); }
+.hl-num { color:var(--m-yel); }
+.hl-kw  { color:var(--m-vio); }
+
+/* Inline prompt, because window.prompt does nothing in a Tauri webview. */
+.ask { position:fixed; inset:0; background:rgba(6,10,15,.6); display:none;
+       align-items:flex-start; justify-content:center; padding-top:22vh; z-index:60; }
+.ask.on { display:flex; }
+.askbox { width:min(380px,90%); background:var(--m-chrome); border:1px solid var(--m-line);
+          border-radius:8px; padding:.7rem .8rem; box-shadow:0 20px 50px -18px rgba(0,0,0,.9); }
+.asktitle { font-size:.7rem; color:var(--m-dim); margin-bottom:.4rem; }
+.askbox input { width:100%; background:var(--m-bg); border:1px solid var(--m-line);
+                border-radius:5px; color:var(--m-fg); font:inherit; font-size:.82rem;
+                padding:.35rem .5rem; outline:none; }
+.askbox input:focus { border-color:var(--m-acc); }
+.askhint { font-size:.6rem; color:var(--m-dim); margin-top:.4rem; opacity:.8; }

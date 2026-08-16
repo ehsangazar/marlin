@@ -51,6 +51,7 @@ export class Sidebar {
   private cwd = "";
   private expanded = new Set<string>();
   private explorerOpen = true;
+  private reposOpen = true;
   private scOpen = true;
   private status: GitStatus | null = null;
   private project: Project | null = null;
@@ -238,12 +239,12 @@ export class Sidebar {
     const repos = this.project?.repos ?? [];
     if (repos.length > 1 && !this.project?.is_repo) {
       frag.appendChild(
-        this.section("Repositories", this.explorerOpen, repos.length, () => {
-          this.explorerOpen = !this.explorerOpen;
+        this.section("Repositories", this.reposOpen, repos.length, () => {
+          this.reposOpen = !this.reposOpen;
           void this.render();
         }),
       );
-      if (this.explorerOpen) {
+      if (this.reposOpen) {
         for (const r of repos) {
           frag.appendChild(
             this.row(0, {
@@ -256,15 +257,15 @@ export class Sidebar {
           );
         }
       }
-    } else {
-      frag.appendChild(
-        this.section("Explorer", this.explorerOpen, null, () => {
-          this.explorerOpen = !this.explorerOpen;
-          void this.render();
-        }),
-      );
-      if (this.explorerOpen) await this.tree(this.cwd, 0, frag);
     }
+
+    frag.appendChild(
+      this.section("Explorer", this.explorerOpen, null, () => {
+        this.explorerOpen = !this.explorerOpen;
+        void this.render();
+      }),
+    );
+    if (this.explorerOpen) await this.tree(this.cwd, 0, frag);
 
     const st = this.status;
     if (st?.is_repo) {

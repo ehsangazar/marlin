@@ -57,37 +57,45 @@ function build(
   };
 }
 
-/** Three dark, three light. Hex values taken from each upstream project. */
+/**
+ * Three dark, three light.
+ *
+ * Contrast raised across all six on 16 Aug after reading a real screenshot: the
+ * secondary text was thin enough that the sidebar was hard to scan, which is
+ * the half of the UI you look at without focusing on. Backgrounds and accents
+ * are close to their upstream values; `dim` and `line` are the ones that moved,
+ * because they carry the chrome.
+ */
 export const THEMES: MarlinTheme[] = [
   build("Marlin Dark", "dark", {
-    bg: "#0A0F16", bar: "#0D131C", chrome: "#101823", line: "#1C2734",
-    fg: "#C6D3E1", dim: "#5C6E82", acc: "#4C8DFF", vio: "#8B7BFF",
-    grn: "#5FD3A0", yel: "#E8B44C", red: "#FF7A7A", cyn: "#4FD1E0",
+    bg: "#080D14", bar: "#0C121B", chrome: "#111A26", line: "#26333F",
+    fg: "#E4ECF5", dim: "#8497AB", acc: "#5C9CFF", vio: "#9E90FF",
+    grn: "#6FE0AF", yel: "#F0C25F", red: "#FF8C8C", cyn: "#5FDCEC",
   }),
   build("Dracula", "dark", {
-    bg: "#282A36", bar: "#21222C", chrome: "#1E1F29", line: "#44475A",
-    fg: "#F8F8F2", dim: "#6272A4", acc: "#BD93F9", vio: "#FF79C6",
-    grn: "#50FA7B", yel: "#F1FA8C", red: "#FF5555", cyn: "#8BE9FD",
+    bg: "#282A36", bar: "#21222C", chrome: "#1E1F29", line: "#565A72",
+    fg: "#F8F8F2", dim: "#8B9BD4", acc: "#C9A5FA", vio: "#FF8FD0",
+    grn: "#5DFB87", yel: "#F4FC9B", red: "#FF6B6B", cyn: "#9BEDFD",
   }),
   build("Tokyo Night", "dark", {
-    bg: "#1A1B26", bar: "#16161E", chrome: "#13131A", line: "#2F3549",
-    fg: "#C0CAF5", dim: "#565F89", acc: "#7AA2F7", vio: "#BB9AF7",
-    grn: "#9ECE6A", yel: "#E0AF68", red: "#F7768E", cyn: "#7DCFFF",
+    bg: "#161721", bar: "#12131B", chrome: "#0F1017", line: "#3B4261",
+    fg: "#D5DCF7", dim: "#7E88B8", acc: "#8DB0F9", vio: "#C7AAF9",
+    grn: "#AEDA7C", yel: "#EBBC7A", red: "#FF8A9F", cyn: "#93D9FF",
   }),
   build("Marlin Light", "light", {
-    bg: "#FBFCFE", bar: "#EEF2F7", chrome: "#E7EDF4", line: "#D3DCE7",
-    fg: "#14202C", dim: "#5D6E7F", acc: "#1B5FD0", vio: "#5B48D6",
-    grn: "#12805A", yel: "#8A6100", red: "#C0392B", cyn: "#0E7490",
+    bg: "#FFFFFF", bar: "#EDF1F6", chrome: "#E3EAF2", line: "#C2CDDA",
+    fg: "#0C1620", dim: "#46586A", acc: "#0E4FBF", vio: "#4B36CC",
+    grn: "#0C6E4C", yel: "#7A5400", red: "#B32D1F", cyn: "#0A6076",
   }),
   build("Solarized Light", "light", {
-    bg: "#FDF6E3", bar: "#EEE8D5", chrome: "#E8E1CC", line: "#D9D2BC",
-    fg: "#586E75", dim: "#93A1A1", acc: "#268BD2", vio: "#6C71C4",
-    grn: "#859900", yel: "#B58900", red: "#DC322F", cyn: "#2AA198",
+    bg: "#FDF6E3", bar: "#F1EAD6", chrome: "#E9E1CB", line: "#CFC9B4",
+    fg: "#3E5257", dim: "#5A6B70", acc: "#1A7BC4", vio: "#5C61BC",
+    grn: "#6E7F00", yel: "#9A7500", red: "#CE2A26", cyn: "#1D8F86",
   }),
   build("Catppuccin Latte", "light", {
-    bg: "#EFF1F5", bar: "#E6E9EF", chrome: "#DCE0E8", line: "#CCD0DA",
-    fg: "#4C4F69", dim: "#8C8FA1", acc: "#1E66F5", vio: "#8839EF",
-    grn: "#40A02B", yel: "#DF8E1D", red: "#D20F39", cyn: "#179299",
+    bg: "#FFFFFF", bar: "#E9ECF2", chrome: "#DEE2EA", line: "#BCC0CC",
+    fg: "#363950", dim: "#6B6E82", acc: "#0F52E0", vio: "#7526E0",
+    grn: "#2F8A1F", yel: "#B0700F", red: "#C00A2F", cyn: "#0E7C74",
   }),
 ];
 

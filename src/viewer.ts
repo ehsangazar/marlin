@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { canHighlight, highlight } from "./highlight";
 
 export type DiffMode = "unified" | "split";
 
@@ -106,14 +107,21 @@ export class Viewer {
   }
 
   private renderFile(content: string): void {
+    const wrap = document.createElement("div");
+    wrap.className = "vfilewrap";
+
+    const lines = content.split("\n");
+    const gutter = document.createElement("pre");
+    gutter.className = "vgutter";
+    gutter.textContent = lines.map((_, i) => String(i + 1)).join("\n");
+
     const pre = document.createElement("pre");
     pre.className = "vfile";
-    const lines = content.split("\n");
-    const width = String(lines.length).length;
-    pre.textContent = lines
-      .map((l, i) => `${String(i + 1).padStart(width, " ")}  ${l}`)
-      .join("\n");
-    this.body.replaceChildren(pre);
+    if (canHighlight(this.name)) pre.appendChild(highlight(content));
+    else pre.textContent = content;
+
+    wrap.append(gutter, pre);
+    this.body.replaceChildren(wrap);
   }
 
   private renderDiff(lines: DiffLine[]): void {

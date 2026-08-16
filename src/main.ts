@@ -21,6 +21,7 @@ import { Palette, type Command } from "./palette";
 import { Settings, load as loadConfig, themeByName, type Config } from "./settings";
 import { Find } from "./find";
 import { menu } from "./menu";
+import { ask } from "./prompt";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
@@ -153,12 +154,18 @@ function renderTabs(): void {
 
     b.append(dot, idx, lbl, x);
     b.addEventListener("click", () => selectTab(i));
+    b.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      selectTab(i);
+      void renameFocused(true);
+    });
     b.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       selectTab(i);
       menu.show(e.clientX, e.clientY, [
         { label: "New Tab", key: "⌘T", run: () => void newTab() },
-        { label: "Rename Tab…", key: "⇧F2", run: () => renameFocused(true) },
+        { label: "Rename Tab…", key: "⇧F2", run: () => void renameFocused(true) },
         { sep: true },
         { label: "Close Tab", key: "⌘W", run: () => closeTab(i) },
         { label: "Close Other Tabs", run: () => closeOthers(i) },
@@ -262,7 +269,7 @@ async function makePane(): Promise<Pane> {
       { label: "Split Vertically", key: "⌘D", run: () => void doSplit("row") },
       { label: "Split Horizontally", key: "⌘⇧D", run: () => void doSplit("col") },
       { sep: true },
-      { label: "Rename Pane…", key: "F2", run: () => renameFocused(false) },
+      { label: "Rename Pane…", key: "F2", run: () => void renameFocused(false) },
       { label: "Zoom Pane", key: "⌘⇧↩", run: zoomPane },
       { label: "Find…", key: "⌘F", run: () => find.open(pane) },
       { label: "Clear Buffer", key: "⌘K", run: () => pane.term.clear() },
@@ -451,7 +458,7 @@ function handleShortcut(e: KeyboardEvent): boolean {
     return !closeViewer();
   }
   if (e.key === "F2") {
-    renameFocused(e.shiftKey);
+    void renameFocused(e.shiftKey);
     return false;
   }
   if (!e.metaKey) return true;
@@ -563,10 +570,10 @@ function closeViewer(): boolean {
  * the pin, the first `cd` overwrites what you just typed, which is the most
  * irritating possible version of this feature. Clearing it hands control back.
  */
-function renameFocused(tabScope: boolean): void {
+async function renameFocused(tabScope: boolean): Promise<void> {
   const tab = curTab();
   const current = tabScope ? tabLabel(tab) : (app.focused?.name ?? "");
-  const next = window.prompt(tabScope ? "Rename tab" : "Rename pane", current);
+  const next = await ask(tabScope ? "Rename tab" : "Rename pane", current);
   if (next === null) return;
   const name = next.trim();
   if (tabScope) {
@@ -635,6 +642,15 @@ async function boot(): Promise<void> {
   });
 
   applyBar();
+
+  // Double-click the empty run of the tab bar for a new tab, the way every
+  // browser does. The check matters: without it, a double-click that lands on a
+  // tab opens a tab as well as selecting one.
+  els.tabbar.addEventListener("dblclick", (e) => {
+    if ((e.target as HTMLElement).closest(".tab")) return;
+    void newTab();
+  });
+
   document.getElementById("btn-new")?.addEventListener("click", () => void newTab());
   document.getElementById("btn-bar")?.addEventListener("click", cycleBar);
   document.getElementById("btn-tree")?.addEventListener("click", toggleTree);
@@ -682,8 +698,8 @@ async function boot(): Promise<void> {
     { label: "Split Horizontally", key: "⌘⇧D", run: () => void doSplit("col") },
     { label: "New Tab", key: "⌘T", run: () => void newTab() },
     { label: "Close Pane", key: "⌘W", run: closeFocused },
-    { label: "Rename Pane", key: "F2", run: () => renameFocused(false) },
-    { label: "Rename Tab", key: "⇧F2", run: () => renameFocused(true) },
+    { label: "Rename Pane", key: "F2", run: () => void renameFocused(false) },
+    { label: "Rename Tab", key: "⇧F2", run: () => void renameFocused(true) },
     { label: "Go to File", key: "⌘P", run: () => palette.open("file") },
     { label: "Search in Files", key: "⌘⇧F", run: () => palette.open("text") },
     { label: "Toggle File Tree", key: "⌘B", run: toggleTree },
