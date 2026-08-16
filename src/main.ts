@@ -18,6 +18,7 @@ import { THEMES, applyTheme, type MarlinTheme } from "./theme";
 import { Sidebar } from "./sidebar";
 import { Viewer, type DiffMode } from "./viewer";
 import { Palette, type Command } from "./palette";
+import { Settings, load as loadConfig, themeByName, type Config } from "./settings";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
@@ -53,6 +54,8 @@ const els = {
 
 let sidebar: Sidebar;
 let palette: Palette;
+let settings: Settings;
+let cfg: Config = loadConfig();
 
 const curTab = (): Tab => app.tabs[app.active] as Tab;
 /** Terminal panes only. A viewer has no pty and no theme of its own. */
@@ -288,6 +291,10 @@ function handleShortcut(e: KeyboardEvent): boolean {
       palette.close();
       return false;
     }
+    if (settings.isOpen) {
+      settings.close();
+      return false;
+    }
     return !closeViewer();
   }
   if (e.key === "F2") {
@@ -309,6 +316,10 @@ function handleShortcut(e: KeyboardEvent): boolean {
   }
   if (k === "t") {
     void newTab();
+    return false;
+  }
+  if (k === ",") {
+    settings.open();
     return false;
   }
   if (k === "p") {
@@ -400,6 +411,7 @@ function renameFocused(tabScope: boolean): void {
 }
 
 function toggleTree(): void {
+  cfg = { ...cfg, tree: !app.tree };
   app.tree = !app.tree;
   els.main.classList.toggle("notree", !app.tree);
   requestAnimationFrame(() => {
@@ -407,9 +419,27 @@ function toggleTree(): void {
   });
 }
 
+/** Applied everywhere at once: panes, chrome and the tree toggle. */
+function applyConfig(next: Config): void {
+  cfg = next;
+  setTheme(themeByName(cfg.theme));
+  for (const p of allPanes()) {
+    p.term.options.fontSize = cfg.fontSize;
+    p.term.options.cursorBlink = cfg.cursorBlink;
+    p.term.options.scrollback = cfg.scrollback;
+  }
+  app.tree = cfg.tree;
+  els.main.classList.toggle("notree", !app.tree);
+  app.diffMode = cfg.diffSplit ? "split" : "unified";
+  requestAnimationFrame(() => {
+    for (const l of leaves(curTab().root)) l.pane.resize();
+  });
+}
+
 function nextTheme(): void {
   const i = THEMES.indexOf(app.theme);
-  setTheme(THEMES[(i + 1) % THEMES.length] as MarlinTheme);
+  const next = THEMES[(i + 1) % THEMES.length] as MarlinTheme;
+  applyConfig({ ...cfg, theme: next.name });
 }
 
 function setTheme(t: MarlinTheme): void {
@@ -491,8 +521,13 @@ async function boot(): Promise<void> {
     { label: "Cycle Tab Bar Position", key: "⌘⇧B", run: cycleBar },
     { label: "Refresh Source Control", run: () => void sidebar.refresh() },
     { label: "Next Theme", run: nextTheme },
+    { label: "Open Settings", key: "⌘,", run: () => settings.open() },
   ];
   palette.setCommands(commands);
+
+  settings = new Settings(cfg, (next) => applyConfig(next));
+  document.getElementById("btn-settings")?.addEventListener("click", () => settings.open());
+  applyConfig(cfg);
 
   const first = await makePane();
   app.tabs.push({ name: "", pinned: false, root: leaf(first) });

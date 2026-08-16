@@ -183,3 +183,32 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .sdot.run { background:var(--m-acc); }
 .sdot.ok { background:var(--m-grn); }
 .sdot.err { background:var(--m-red); }
+
+/* Settings: one screen, grouped, no tabs. */
+.sheet { position:fixed; inset:0; background:rgba(6,10,15,.72); display:none;
+         align-items:center; justify-content:center; padding:1rem; z-index:45; }
+.sheet.on { display:flex; }
+.sheetcard { width:min(440px,100%); max-height:86%; background:var(--m-chrome);
+             border:1px solid var(--m-line); border-radius:10px; overflow:hidden;
+             display:flex; flex-direction:column; }
+.sheetcard h4 { margin:0; padding:.7rem .9rem; font-size:.76rem; font-weight:600; color:var(--m-fg);
+                border-bottom:1px solid var(--m-line); display:flex; align-items:center; }
+.sheetcard h4 .vclose { margin-left:auto; }
+.sheetbody { overflow:auto; flex:1; }
+.sgrp { font-size:.6rem; letter-spacing:.11em; text-transform:uppercase; color:var(--m-dim);
+        padding:.55rem .9rem .25rem; background:var(--m-bg);
+        border-bottom:1px solid var(--m-line); border-top:1px solid var(--m-line); }
+.setrow { display:flex; align-items:center; gap:.8rem; padding:.5rem .9rem;
+          border-bottom:1px solid var(--m-line); font-size:.72rem; color:var(--m-dim); }
+.slab { flex:1; display:flex; flex-direction:column; }
+.slab em { font-style:normal; font-size:.6rem; color:var(--m-dim); opacity:.75; line-height:1.35; }
+.setrow select, .setrow input { font:inherit; font-size:.72rem; background:var(--m-bg);
+  color:var(--m-fg); border:1px solid var(--m-line); border-radius:4px; padding:.2rem .35rem; }
+.sw { width:34px; height:19px; border-radius:20px; background:var(--m-line); border:0;
+      position:relative; cursor:pointer; padding:0; flex:0 0 auto; }
+.sw::after { content:""; position:absolute; top:2px; left:2px; width:15px; height:15px;
+             border-radius:50%; background:var(--m-dim); }
+.sw[aria-pressed="true"] { background:var(--m-acc); }
+.sw[aria-pressed="true"]::after { left:17px; background:#06101F; }
+.sheetnote { padding:.55rem .9rem; font-size:.62rem; color:var(--m-dim);
+             border-top:1px solid var(--m-line); background:var(--m-bg); }
