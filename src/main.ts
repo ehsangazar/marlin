@@ -19,6 +19,8 @@ import { Sidebar } from "./sidebar";
 import { Viewer, type DiffMode } from "./viewer";
 import { Palette, type Command } from "./palette";
 import { Settings, load as loadConfig, themeByName, type Config } from "./settings";
+import { Find } from "./find";
+import { menu } from "./menu";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
@@ -55,6 +57,8 @@ const els = {
 let sidebar: Sidebar;
 let palette: Palette;
 let settings: Settings;
+let find: Find;
+let dragTab: number | null = null;
 let cfg: Config = loadConfig();
 
 const curTab = (): Tab => app.tabs[app.active] as Tab;
@@ -149,6 +153,52 @@ function renderTabs(): void {
 
     b.append(dot, idx, lbl, x);
     b.addEventListener("click", () => selectTab(i));
+    b.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      selectTab(i);
+      menu.show(e.clientX, e.clientY, [
+        { label: "New Tab", key: "⌘T", run: () => void newTab() },
+        { label: "Rename Tab…", key: "⇧F2", run: () => renameFocused(true) },
+        { sep: true },
+        { label: "Close Tab", key: "⌘W", run: () => closeTab(i) },
+        { label: "Close Other Tabs", run: () => closeOthers(i) },
+        { sep: true },
+        { head: "Tab bar" },
+        { label: "Top", run: () => setBar("h") },
+        { label: "Side", run: () => setBar("v") },
+        { label: "Hidden", run: () => setBar("hidden") },
+      ]);
+    });
+
+    // Drag to reorder. The click handler re-renders, so the node under the
+    // pointer must survive between mousedown and drop: reorder state lives in
+    // the closure, not in the DOM.
+    b.draggable = true;
+    b.addEventListener("dragstart", (e) => {
+      dragTab = i;
+      b.classList.add("drag");
+      e.dataTransfer?.setData("text/plain", String(i));
+    });
+    b.addEventListener("dragend", () => {
+      dragTab = null;
+      b.classList.remove("drag");
+    });
+    b.addEventListener("dragover", (e) => {
+      if (dragTab === null || dragTab === i) return;
+      e.preventDefault();
+      b.classList.add("over");
+    });
+    b.addEventListener("dragleave", () => b.classList.remove("over"));
+    b.addEventListener("drop", (e) => {
+      e.preventDefault();
+      b.classList.remove("over");
+      if (dragTab === null || dragTab === i) return;
+      const moved = app.tabs.splice(dragTab, 1)[0];
+      if (moved) app.tabs.splice(i, 0, moved);
+      dragTab = null;
+      app.active = i;
+      selectTab(i);
+    });
     return b;
   });
   els.tabbar.replaceChildren(...nodes);
@@ -205,6 +255,24 @@ async function makePane(): Promise<Pane> {
     () => refreshChrome(),
   );
   pane.el.addEventListener("mousedown", () => focusPane(pane));
+  pane.el.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    focusPane(pane);
+    menu.show(e.clientX, e.clientY, [
+      { label: "Split Vertically", key: "⌘D", run: () => void doSplit("row") },
+      { label: "Split Horizontally", key: "⌘⇧D", run: () => void doSplit("col") },
+      { sep: true },
+      { label: "Rename Pane…", key: "F2", run: () => renameFocused(false) },
+      { label: "Zoom Pane", key: "⌘⇧↩", run: zoomPane },
+      { label: "Find…", key: "⌘F", run: () => find.open(pane) },
+      { label: "Clear Buffer", key: "⌘K", run: () => pane.term.clear() },
+      { sep: true },
+      { label: "Copy", key: "⌘C", run: () => void copySelection(pane) },
+      { label: "Paste", key: "⌘V", run: () => void pasteInto(pane) },
+      { sep: true },
+      { label: "Close Pane", key: "⌘W", run: closeFocused },
+    ]);
+  });
   pane.term.attachCustomKeyEventHandler(handleShortcut);
   return pane;
 }
@@ -222,6 +290,54 @@ async function doSplit(dir: "row" | "col"): Promise<void> {
   await pane.open();
   focusPane(pane);
   render();
+}
+
+/** Zoom: stash the tree and show one pane. Pressing it again restores. */
+function zoomPane(): void {
+  const tab = curTab();
+  if (tab.zoomStash) {
+    tab.root = tab.zoomStash;
+    tab.zoomStash = null;
+  } else if (leaves(tab.root).length > 1 && app.focused) {
+    tab.zoomStash = tab.root;
+    tab.root = leaf(app.focused);
+  } else {
+    return;
+  }
+  render();
+  const still = leaves(tab.root).find((l) => l.pane === app.focused);
+  focusPane(still ? still.pane : (leaves(tab.root)[0] as { pane: Surface }).pane);
+}
+
+/**
+ * Focus the nearest pane in a direction, by geometry rather than by tree
+ * position. The tree knows the split structure; only the screen knows what is
+ * actually to the left of what.
+ */
+function focusDirection(dir: "left" | "right" | "up" | "down"): void {
+  if (!app.focused) return;
+  const from = app.focused.el.getBoundingClientRect();
+  let best: Surface | null = null;
+  let bestDist = Infinity;
+
+  for (const l of leaves(curTab().root)) {
+    if (l.pane === app.focused) continue;
+    const r = l.pane.el.getBoundingClientRect();
+    const dx = r.left + r.width / 2 - (from.left + from.width / 2);
+    const dy = r.top + r.height / 2 - (from.top + from.height / 2);
+    const ok =
+      dir === "left" ? dx < -1 : dir === "right" ? dx > 1 : dir === "up" ? dy < -1 : dy > 1;
+    if (!ok) continue;
+    // Distance along the axis of travel, plus a penalty for drifting off it.
+    const along = dir === "left" || dir === "right" ? Math.abs(dx) : Math.abs(dy);
+    const off = dir === "left" || dir === "right" ? Math.abs(dy) : Math.abs(dx);
+    const d = along + off * 2;
+    if (d < bestDist) {
+      bestDist = d;
+      best = l.pane;
+    }
+  }
+  if (best) focusPane(best);
 }
 
 function closeFocused(): void {
@@ -245,6 +361,38 @@ function closeFocused(): void {
   if (first) app.focused = first.pane;
   render();
   if (app.focused) focusPane(app.focused);
+}
+
+function setBar(b: BarState): void {
+  app.bar = b;
+  applyBar();
+  refreshChrome();
+}
+
+function closeOthers(keep: number): void {
+  const survivor = app.tabs[keep];
+  if (!survivor) return;
+  for (const [i, t] of app.tabs.entries()) {
+    if (i === keep) continue;
+    for (const l of leaves(t.root)) l.pane.dispose();
+  }
+  app.tabs = [survivor];
+  app.active = 0;
+  selectTab(0);
+}
+
+async function copySelection(p: Pane): Promise<void> {
+  const sel = p.term.getSelection();
+  if (sel) await navigator.clipboard.writeText(sel).catch(() => {});
+}
+
+async function pasteInto(p: Pane): Promise<void> {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (t && p.ptyId !== null) await invoke("pty_write", { id: p.ptyId, data: t });
+  } catch {
+    /* clipboard denied */
+  }
 }
 
 function selectTab(i: number): void {
@@ -295,6 +443,11 @@ function handleShortcut(e: KeyboardEvent): boolean {
       settings.close();
       return false;
     }
+    if (find.isOpen) {
+      find.close();
+      return false;
+    }
+    menu.hide();
     return !closeViewer();
   }
   if (e.key === "F2") {
@@ -320,6 +473,22 @@ function handleShortcut(e: KeyboardEvent): boolean {
   }
   if (k === ",") {
     settings.open();
+    return false;
+  }
+  if (k === "f" && !e.shiftKey) {
+    if (app.focused && isTerm(app.focused)) find.open(app.focused);
+    return false;
+  }
+  if (k === "k") {
+    if (app.focused && isTerm(app.focused)) app.focused.term.clear();
+    return false;
+  }
+  if (k === "enter" && e.shiftKey) {
+    zoomPane();
+    return false;
+  }
+  if (e.altKey && ["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(k)) {
+    focusDirection(k.replace("arrow", "") as "left" | "right" | "up" | "down");
     return false;
   }
   if (k === "p") {
@@ -522,9 +691,14 @@ async function boot(): Promise<void> {
     { label: "Refresh Source Control", run: () => void sidebar.refresh() },
     { label: "Next Theme", run: nextTheme },
     { label: "Open Settings", key: "⌘,", run: () => settings.open() },
+    { label: "Zoom Pane", key: "⌘⇧↩", run: zoomPane },
+    { label: "Find in Scrollback", key: "⌘F", run: () => { if (app.focused && isTerm(app.focused)) find.open(app.focused); } },
+    { label: "Clear Buffer", key: "⌘K", run: () => { if (app.focused && isTerm(app.focused)) app.focused.term.clear(); } },
+    { label: "Close Other Tabs", run: () => closeOthers(app.active) },
   ];
   palette.setCommands(commands);
 
+  find = new Find();
   settings = new Settings(cfg, (next) => applyConfig(next));
   document.getElementById("btn-settings")?.addEventListener("click", () => settings.open());
   applyConfig(cfg);

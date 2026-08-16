@@ -212,3 +212,36 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .sw[aria-pressed="true"]::after { left:17px; background:#06101F; }
 .sheetnote { padding:.55rem .9rem; font-size:.62rem; color:var(--m-dim);
              border-top:1px solid var(--m-line); background:var(--m-bg); }
+
+/* Find in scrollback */
+.find { position:fixed; top:44px; right:16px; z-index:35; display:none;
+        align-items:center; gap:.3rem; padding:.3rem .4rem;
+        background:var(--m-chrome); border:1px solid var(--m-line); border-radius:6px;
+        box-shadow:0 12px 30px -14px rgba(0,0,0,.8); }
+.find.on { display:flex; }
+.find input { background:var(--m-bg); border:1px solid var(--m-line); border-radius:4px;
+              color:var(--m-fg); font:inherit; font-size:.72rem; padding:.2rem .4rem; width:190px; outline:none; }
+.find .fcount { font-size:.62rem; color:var(--m-red); min-width:52px; }
+.fbtn { background:none; border:0; color:var(--m-dim); font:inherit; font-size:.75rem;
+        padding:.1rem .3rem; border-radius:3px; cursor:pointer; }
+.fbtn:hover { background:var(--m-line); color:var(--m-fg); }
+
+/* Context menu */
+.ctx { position:fixed; z-index:50; min-width:210px; background:var(--m-chrome);
+       border:1px solid var(--m-line); border-radius:7px; padding:4px; display:none;
+       box-shadow:0 14px 34px -14px rgba(0,0,0,.85); }
+.ctx.on { display:block; }
+.ctx button { display:flex; width:100%; align-items:center; gap:.7rem; background:none; border:0;
+              color:var(--m-fg); font:inherit; font-size:.72rem; text-align:left;
+              padding:.3rem .5rem; border-radius:4px; cursor:pointer; }
+.ctx button:hover { background:var(--m-acc); color:#06101F; }
+.ctx button .sc { margin-left:auto; color:var(--m-dim); font-size:.66rem; }
+.ctx button:hover .sc { color:rgba(6,16,31,.72); }
+.ctx hr { border:0; border-top:1px solid var(--m-line); margin:4px 2px; }
+.ctx .hd { font-size:.6rem; color:var(--m-dim); padding:.3rem .5rem .15rem;
+           letter-spacing:.09em; text-transform:uppercase; }
+
+/* Drag and drop */
+.tab.drag { opacity:.35; }
+.tab.over { box-shadow:inset 2px 0 0 var(--m-vio); }
+.pane-term.dragover { outline:2px dashed var(--m-vio); outline-offset:-3px; }

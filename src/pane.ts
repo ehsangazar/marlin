@@ -1,6 +1,7 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
+import { SearchAddon } from "@xterm/addon-search";
 import { invoke } from "@tauri-apps/api/core";
 import type { MarlinTheme } from "./theme";
 
@@ -28,6 +29,7 @@ export class Pane {
   ptyId: number | null = null;
 
   private fit = new FitAddon();
+  readonly search = new SearchAddon();
   private webgl: WebglAddon | null = null;
   private onTitle?: (p: Pane) => void;
   private onCwd?: (p: Pane) => void;
@@ -61,6 +63,7 @@ export class Pane {
     });
 
     this.term.loadAddon(this.fit);
+    this.term.loadAddon(this.search);
   }
 
   /** Must run after the element is in the DOM: WebGL needs a real canvas size. */
