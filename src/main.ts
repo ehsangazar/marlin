@@ -18,7 +18,8 @@ import { THEMES, applyTheme, type MarlinTheme } from "./theme";
 import { Sidebar } from "./sidebar";
 import { Viewer, type DiffMode } from "./viewer";
 import { Palette, type Command } from "./palette";
-import { Settings, load as loadConfig, themeByName, type Config } from "./settings";
+import { Settings, themeByName } from "./settings";
+import { load as loadConfig, save as saveConfig, DEFAULTS, type Config } from "./config";
 import { Find } from "./find";
 import { menu } from "./menu";
 import { ask } from "./prompt";
@@ -60,7 +61,7 @@ let palette: Palette;
 let settings: Settings;
 let find: Find;
 let dragTab: number | null = null;
-let cfg: Config = loadConfig();
+let cfg: Config = { ...DEFAULTS };
 
 const curTab = (): Tab => app.tabs[app.active] as Tab;
 /** Terminal panes only. A viewer has no pty and no theme of its own. */
@@ -347,6 +348,21 @@ function focusDirection(dir: "left" | "right" | "up" | "down"): void {
   if (best) focusPane(best);
 }
 
+/** A new pane in a given directory, split into the current tab. Right-clicking
+ *  a folder and getting a shell there is most of why a tree is useful. */
+async function openTerminalIn(dir: string): Promise<void> {
+  const tab = curTab();
+  const target = app.focused ? findLeaf(tab.root, app.focused) : leaves(tab.root)[0];
+  if (!target) return;
+  const pane = await makePane();
+  pane.startCwd = dir;
+  tab.root = replaceNode(tab.root, target, split("row", leaf(target.pane), leaf(pane)));
+  render();
+  await pane.open();
+  focusPane(pane);
+  render();
+}
+
 function closeFocused(): void {
   const tab = curTab();
   if (!app.focused) return;
@@ -602,7 +618,8 @@ async function renameFocused(tabScope: boolean): Promise<void> {
 }
 
 function toggleTree(): void {
-  cfg = { ...cfg, tree: !app.tree };
+  cfg = { ...cfg, fileTree: !app.tree };
+  void saveConfig(cfg);
   app.tree = !app.tree;
   els.main.classList.toggle("notree", !app.tree);
   requestAnimationFrame(() => {
@@ -610,27 +627,33 @@ function toggleTree(): void {
   });
 }
 
-/** Applied everywhere at once: panes, chrome and the tree toggle. */
+/** Applied everywhere at once: panes, chrome, tab bar and the tree. */
 function applyConfig(next: Config): void {
   cfg = next;
   setTheme(themeByName(cfg.theme));
   for (const p of allPanes()) {
+    p.term.options.fontFamily = cfg.fontFamily;
     p.term.options.fontSize = cfg.fontSize;
+    p.term.options.cursorStyle = cfg.cursorStyle;
     p.term.options.cursorBlink = cfg.cursorBlink;
     p.term.options.scrollback = cfg.scrollback;
   }
-  app.tree = cfg.tree;
+  app.tree = cfg.fileTree;
   els.main.classList.toggle("notree", !app.tree);
-  app.diffMode = cfg.diffSplit ? "split" : "unified";
+  app.bar = cfg.tabBar === "top" ? "h" : cfg.tabBar === "side" ? "v" : "hidden";
+  applyBar();
+  app.diffMode = cfg.diffView;
   requestAnimationFrame(() => {
     for (const l of leaves(curTab().root)) l.pane.resize();
   });
+  refreshChrome();
 }
 
 function nextTheme(): void {
   const i = THEMES.indexOf(app.theme);
   const next = THEMES[(i + 1) % THEMES.length] as MarlinTheme;
   applyConfig({ ...cfg, theme: next.name });
+  void saveConfig(cfg);
 }
 
 function setTheme(t: MarlinTheme): void {
@@ -719,6 +742,7 @@ async function boot(): Promise<void> {
           onClose: () => closeViewer(),
         }),
       ),
+    terminalHere: (dir) => void openTerminalIn(dir),
     gitAction: async (action, cwd, path) => {
       const cmd = action === "stage" ? "git_stage" : action === "unstage" ? "git_unstage" : "git_discard";
       try {
@@ -774,8 +798,15 @@ async function boot(): Promise<void> {
   );
 
   find = new Find();
-  settings = new Settings(cfg, (next) => applyConfig(next));
+  settings = new Settings(
+    cfg,
+    (next) => applyConfig(next),
+    (path, name) =>
+      openViewer(new Viewer({ kind: "file", name, path, onClose: () => closeViewer() })),
+  );
   document.getElementById("btn-settings")?.addEventListener("click", () => settings.open());
+  cfg = await loadConfig();
+  settings.sync(cfg);
   applyConfig(cfg);
 
   const first = await makePane();

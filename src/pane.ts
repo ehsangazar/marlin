@@ -26,6 +26,8 @@ export class Pane {
   pinned = false;
   status: PaneStatus = null;
   cwd = "";
+  /** Where a pane should start, when it was opened from the tree. */
+  startCwd: string | null = null;
   ptyId: number | null = null;
 
   private fit = new FitAddon();
@@ -84,10 +86,11 @@ export class Pane {
 
     this.fit.fit();
 
+    if (this.startCwd) this.cwd = this.startCwd;
     this.ptyId = await invoke<number>("pty_spawn", {
       rows: this.term.rows,
       cols: this.term.cols,
-      cwd: null,
+      cwd: this.startCwd,
       shell: null,
     });
 

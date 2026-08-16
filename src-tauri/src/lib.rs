@@ -57,6 +57,21 @@ fn config_path() -> String {
 }
 
 #[tauri::command]
+fn fs_reveal(path: String) -> Result<(), String> {
+    fs::reveal(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn fs_open_default(path: String) -> Result<(), String> {
+    fs::open_path(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn fs_parent(path: String) -> String {
+    fs::parent_dir(&path)
+}
+
+#[tauri::command]
 fn open_external(url: String) -> Result<(), String> {
     fs::open_url(&url).map_err(|e| e.to_string())
 }
@@ -148,6 +163,9 @@ pub fn run() {
             config_load,
             config_save,
             config_path,
+            fs_reveal,
+            fs_open_default,
+            fs_parent,
             open_external,
             fs_home,
             fs_display,

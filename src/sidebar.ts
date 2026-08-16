@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { icon } from "./icons";
+import { menu } from "./menu";
 
 export interface Entry {
   name: string;
@@ -34,6 +35,8 @@ interface Handlers {
   openFile: (path: string, name: string) => void;
   openDiff: (cwd: string, path: string, name: string, staged: boolean) => void;
   gitAction: (action: "stage" | "unstage" | "discard", cwd: string, path: string) => void;
+  /** Open a terminal in this directory, in this tab. */
+  terminalHere: (dir: string) => void;
 }
 
 /**
@@ -96,6 +99,7 @@ export class Sidebar {
     label: string;
     cls?: string;
     title?: string;
+    isDir?: boolean;
     trailing?: HTMLElement[];
     onClick?: (e: MouseEvent) => void;
   }): HTMLElement {
@@ -120,7 +124,42 @@ export class Sidebar {
     b.append(tw, ic, nm);
     if (opts.trailing) b.append(...opts.trailing);
     if (opts.onClick) b.addEventListener("click", opts.onClick);
+    if (opts.title) {
+      const path = opts.title;
+      b.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        menu.show(e.clientX, e.clientY, this.pathMenu(path, opts.isDir ?? false));
+      });
+    }
     return b;
+  }
+
+  /** The menu a path gets. Directories and files differ by one entry, so they
+   *  share it rather than drifting apart. */
+  private pathMenu(path: string, isDir: boolean) {
+    const name = path.split("/").pop() ?? path;
+    return [
+      ...(isDir
+        ? [{ label: "Open in Terminal Here", run: () => this.h.terminalHere(path) }]
+        : [
+            { label: "Open", run: () => this.h.openFile(path, name) },
+            { label: "Open in Terminal Here", run: () => void this.terminalForFile(path) },
+          ]),
+      { label: "Open with Default App", run: () => void invoke("fs_open_default", { path }) },
+      { sep: true },
+      { label: "Reveal in Finder", run: () => void invoke("fs_reveal", { path }) },
+      { label: "Copy Path", run: () => void navigator.clipboard.writeText(path) },
+      { label: "Copy Name", run: () => void navigator.clipboard.writeText(name) },
+      { sep: true },
+      { label: "Set as Sidebar Root", run: () => void this.setCwd(isDir ? path : dirOf(path)) },
+      { label: "Refresh", run: () => void this.refresh() },
+    ];
+  }
+
+  private async terminalForFile(path: string): Promise<void> {
+    const dir = await invoke<string>("fs_parent", { path });
+    this.h.terminalHere(dir);
   }
 
   private section(label: string, open: boolean, count: number | null, toggle: () => void): HTMLElement {
@@ -157,6 +196,7 @@ export class Sidebar {
           label: e.name,
           cls: e.dir ? "dir" : "",
           title: e.path,
+          isDir: e.dir,
           onClick: () => {
             if (e.dir) {
               if (open) this.expanded.delete(e.path);
@@ -247,6 +287,7 @@ export class Sidebar {
               cls: "repo",
               label: r,
               title: `${this.cwd}/${r}`,
+              isDir: true,
               onClick: () => void this.setCwd(`${this.cwd}/${r}`),
             }),
           );
@@ -325,4 +366,10 @@ async function shortPath(p: string): Promise<string> {
   } catch {
     return p;
   }
+}
+
+
+function dirOf(p: string): string {
+  const i = p.lastIndexOf('/');
+  return i > 0 ? p.slice(0, i) : p;
 }

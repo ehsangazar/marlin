@@ -1,6 +1,6 @@
 //! Filesystem, and the project detection that the agent features hang off.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::Serialize;
@@ -261,4 +261,26 @@ pub fn open_url(url: &str) -> Result<()> {
     }
     std::process::Command::new("open").arg(url).spawn()?;
     Ok(())
+}
+
+/// Reveal a path in Finder.
+pub fn reveal(path: &str) -> Result<()> {
+    std::process::Command::new("open").arg("-R").arg(path).spawn()?;
+    Ok(())
+}
+
+/// Open a path with whatever the OS thinks owns it.
+pub fn open_path(path: &str) -> Result<()> {
+    std::process::Command::new("open").arg(path).spawn()?;
+    Ok(())
+}
+
+/// The directory a path lives in, so "open a terminal here" works whether you
+/// right-clicked a folder or a file inside it.
+pub fn parent_dir(path: &str) -> String {
+    let p = Path::new(path);
+    if p.is_dir() {
+        return path.to_string();
+    }
+    p.parent().map(|x| x.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string())
 }
