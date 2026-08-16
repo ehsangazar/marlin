@@ -17,6 +17,7 @@ import type { Surface } from "./layout";
 import { THEMES, applyTheme, type MarlinTheme } from "./theme";
 import { Sidebar } from "./sidebar";
 import { Viewer, type DiffMode } from "./viewer";
+import { Palette, type Command } from "./palette";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
@@ -51,6 +52,7 @@ const els = {
 };
 
 let sidebar: Sidebar;
+let palette: Palette;
 
 const curTab = (): Tab => app.tabs[app.active] as Tab;
 /** Terminal panes only. A viewer has no pty and no theme of its own. */
@@ -149,7 +151,10 @@ function focusPane(p: Surface): void {
   app.focused = p;
   for (const l of leaves(curTab().root)) l.pane.el.classList.toggle("focus", l.pane === p);
   p.focus();
-  if (isTerm(p) && p.cwd) void sidebar.setCwd(p.cwd);
+  if (isTerm(p) && p.cwd) {
+    void sidebar.setCwd(p.cwd);
+    palette.setRoot(p.cwd);
+  }
   refreshChrome();
 }
 
@@ -244,7 +249,15 @@ function handleShortcut(e: KeyboardEvent): boolean {
   // Escape only belongs to Marlin while a viewer has taken the tab over.
   // Otherwise it is the shell's, and stealing it would break vi for everyone.
   if (e.key === "Escape" && !e.metaKey) {
+    if (palette.isOpen) {
+      palette.close();
+      return false;
+    }
     return !closeViewer();
+  }
+  if (e.key === "F2") {
+    renameFocused(e.shiftKey);
+    return false;
   }
   if (!e.metaKey) return true;
   const k = e.key.toLowerCase();
@@ -261,6 +274,14 @@ function handleShortcut(e: KeyboardEvent): boolean {
   }
   if (k === "t") {
     void newTab();
+    return false;
+  }
+  if (k === "p") {
+    palette.open(e.shiftKey ? "cmd" : "file");
+    return false;
+  }
+  if (k === "f" && e.shiftKey) {
+    palette.open("text");
     return false;
   }
   if (k === "b") {
@@ -320,12 +341,40 @@ function closeViewer(): boolean {
   return true;
 }
 
+/**
+ * Renaming, and the rule that makes it worth having.
+ *
+ * A manual rename pins the name and stops the shell touching that pane. Without
+ * the pin, the first `cd` overwrites what you just typed, which is the most
+ * irritating possible version of this feature. Clearing it hands control back.
+ */
+function renameFocused(tabScope: boolean): void {
+  const tab = curTab();
+  const current = tabScope ? tabLabel(tab) : (app.focused?.name ?? "");
+  const next = window.prompt(tabScope ? "Rename tab" : "Rename pane", current);
+  if (next === null) return;
+  const name = next.trim();
+  if (tabScope) {
+    tab.name = name;
+    tab.pinned = name.length > 0;
+  } else if (app.focused && isTerm(app.focused)) {
+    app.focused.name = name || "shell";
+    app.focused.pinned = name.length > 0;
+  }
+  refreshChrome();
+}
+
 function toggleTree(): void {
   app.tree = !app.tree;
   els.main.classList.toggle("notree", !app.tree);
   requestAnimationFrame(() => {
     for (const l of leaves(curTab().root)) l.pane.resize();
   });
+}
+
+function nextTheme(): void {
+  const i = THEMES.indexOf(app.theme);
+  setTheme(THEMES[(i + 1) % THEMES.length] as MarlinTheme);
 }
 
 function setTheme(t: MarlinTheme): void {
@@ -356,6 +405,10 @@ async function boot(): Promise<void> {
   document.getElementById("btn-bar")?.addEventListener("click", cycleBar);
   document.getElementById("btn-tree")?.addEventListener("click", toggleTree);
 
+  palette = new Palette((path, name) =>
+    openViewer(new Viewer({ kind: "file", name, path, onClose: () => closeViewer() })),
+  );
+
   sidebar = new Sidebar(els.tree, {
     openFile: (path, name) =>
       openViewer(
@@ -384,7 +437,27 @@ async function boot(): Promise<void> {
       await sidebar.refresh();
     },
   });
-  void sidebar.setCwd(await invoke<string>("fs_home"));
+  const home = await invoke<string>("fs_home");
+  void sidebar.setCwd(home);
+  palette.setRoot(home);
+
+  // One registry. The palette and the key map both read it, so an action cannot
+  // exist in one and be missing from the other.
+  const commands: Command[] = [
+    { label: "Split Vertically", key: "⌘D", run: () => void doSplit("row") },
+    { label: "Split Horizontally", key: "⌘⇧D", run: () => void doSplit("col") },
+    { label: "New Tab", key: "⌘T", run: () => void newTab() },
+    { label: "Close Pane", key: "⌘W", run: closeFocused },
+    { label: "Rename Pane", key: "F2", run: () => renameFocused(false) },
+    { label: "Rename Tab", key: "⇧F2", run: () => renameFocused(true) },
+    { label: "Go to File", key: "⌘P", run: () => palette.open("file") },
+    { label: "Search in Files", key: "⌘⇧F", run: () => palette.open("text") },
+    { label: "Toggle File Tree", key: "⌘B", run: toggleTree },
+    { label: "Cycle Tab Bar Position", key: "⌘⇧B", run: cycleBar },
+    { label: "Refresh Source Control", run: () => void sidebar.refresh() },
+    { label: "Next Theme", run: nextTheme },
+  ];
+  palette.setCommands(commands);
 
   const first = await makePane();
   app.tabs.push({ name: "", pinned: false, root: leaf(first) });

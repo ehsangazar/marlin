@@ -106,3 +106,92 @@ pub fn display_path(path: &str) -> String {
     }
 }
 
+
+#[derive(Serialize, Clone, Debug)]
+pub struct Hit {
+    pub path: String,
+    pub name: String,
+    pub line: u32,
+    pub text: String,
+}
+
+/// Walk for go-to-file. Uses the `ignore` crate so `.gitignore` is respected,
+/// which is the difference between a useful index and one full of `target/`.
+pub fn walk(root: &str, limit: usize) -> Vec<Entry> {
+    let mut out = Vec::new();
+    for e in ignore::WalkBuilder::new(root)
+        .hidden(false)
+        .git_ignore(true)
+        .max_depth(Some(12))
+        .build()
+        .flatten()
+    {
+        if out.len() >= limit {
+            break;
+        }
+        if !e.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let path = e.path();
+        if path.components().any(|c| SKIP.contains(&c.as_os_str().to_string_lossy().as_ref())) {
+            continue;
+        }
+        out.push(Entry {
+            name: path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+            path: path.to_string_lossy().to_string(),
+            dir: false,
+        });
+    }
+    out
+}
+
+/// Search every file's text. A naive scan, because at project scale it is
+/// instant. If it ever is not, the answer is to shell out to ripgrep, not to
+/// build an index: an index means a watcher, a cache and an invalidation bug.
+pub fn grep(root: &str, query: &str, limit: usize) -> Vec<Hit> {
+    let mut out = Vec::new();
+    if query.is_empty() {
+        return out;
+    }
+    let needle = query.to_lowercase();
+
+    for e in ignore::WalkBuilder::new(root)
+        .hidden(false)
+        .git_ignore(true)
+        .max_depth(Some(12))
+        .build()
+        .flatten()
+    {
+        if out.len() >= limit {
+            break;
+        }
+        if !e.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let path = e.path();
+        // Skip anything large enough that reading it would stall the search.
+        if std::fs::metadata(path).map(|m| m.len() > 2 * 1024 * 1024).unwrap_or(true) {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(path) else { continue };
+        // Binary files have nothing to match and everything to slow us down.
+        if bytes.iter().take(1024).any(|b| *b == 0) {
+            continue;
+        }
+        let text = String::from_utf8_lossy(&bytes);
+        for (i, line) in text.lines().enumerate() {
+            if out.len() >= limit {
+                break;
+            }
+            if line.to_lowercase().contains(&needle) {
+                out.push(Hit {
+                    path: path.to_string_lossy().to_string(),
+                    name: path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+                    line: i as u32 + 1,
+                    text: line.chars().take(200).collect(),
+                });
+            }
+        }
+    }
+    out
+}

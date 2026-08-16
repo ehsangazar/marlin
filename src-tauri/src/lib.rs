@@ -21,6 +21,16 @@ fn fs_detect(path: String) -> fs::Project {
 }
 
 #[tauri::command]
+fn fs_walk(path: String) -> Vec<fs::Entry> {
+    fs::walk(&path, 4000)
+}
+
+#[tauri::command]
+fn fs_grep(path: String, query: String) -> Vec<fs::Hit> {
+    fs::grep(&path, &query, 200)
+}
+
+#[tauri::command]
 fn fs_home() -> String {
     fs::home()
 }
@@ -99,6 +109,8 @@ pub fn run() {
             fs_list,
             fs_read,
             fs_detect,
+            fs_walk,
+            fs_grep,
             fs_home,
             fs_display,
             git_status,

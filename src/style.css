@@ -152,3 +152,28 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
         padding:.18rem .5rem; border-bottom:1px solid var(--m-line); background:var(--m-chrome);
         position:sticky; top:0; }
 .verr, .vempty { padding:.7rem; font-size:.72rem; color:var(--m-dim); }
+
+/* Palette: commands, go to file, and search across files. */
+.pal { position:fixed; inset:0; background:rgba(6,10,15,.5); display:none;
+       justify-content:center; align-items:flex-start; padding-top:60px; z-index:40; }
+.pal.on { display:flex; }
+.palbox { width:min(600px,92%); background:var(--m-chrome); border:1px solid var(--m-line);
+          border-radius:8px; overflow:hidden; box-shadow:0 20px 50px -18px rgba(0,0,0,.9); }
+.palin { display:flex; align-items:center; gap:.5rem; padding:.5rem .7rem;
+         border-bottom:1px solid var(--m-line); }
+.palin .pfx { color:var(--m-acc); font-size:.72rem; flex:0 0 auto; }
+.palin input { flex:1; background:none; border:0; outline:none; color:var(--m-fg);
+               font:inherit; font-size:.8rem; }
+.palres { max-height:300px; overflow:auto; padding:4px; }
+.pres { display:flex; align-items:baseline; gap:.5rem; padding:.26rem .5rem;
+        border-radius:4px; font-size:.72rem; color:var(--m-fg); cursor:pointer; }
+.pres.on, .pres:hover { background:var(--m-acc); color:#06101F; }
+.pres.empty { color:var(--m-dim); cursor:default; }
+.pres.empty:hover { background:none; color:var(--m-dim); }
+.pres .pth { margin-left:auto; color:var(--m-dim); font-size:.66rem;
+             overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pres .ln { color:var(--m-dim); font-size:.66rem; flex:0 0 auto; }
+.pres.on .pth, .pres.on .ln { color:rgba(6,16,31,.7); }
+.pres mark { background:rgba(232,180,76,.35); color:inherit; border-radius:2px; }
+.palfoot { padding:.35rem .7rem; font-size:.62rem; color:var(--m-dim);
+           border-top:1px solid var(--m-line); background:var(--m-bg); display:flex; gap:.9rem; }
