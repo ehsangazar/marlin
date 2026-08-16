@@ -249,7 +249,10 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 /* A tab needs to be keyboard-reachable without wearing the browser's focus
    ring, which reads as a rendering bug rather than as focus. */
 .tab:focus { outline: none; }
-.tab:focus-visible { box-shadow: inset 0 0 0 1px var(--m-acc); }
+/* Keyboard focus reuses the selected indicator rather than adding a ring around
+   it. A second treatment on top of the first reads as a rendering bug. */
+.body.h .tab:focus-visible { box-shadow: inset 0 2px 0 var(--m-acc); }
+.body.v .tab:focus-visible { box-shadow: inset 2px 0 0 var(--m-acc); }
 .trow:focus, .tsec:focus { outline: none; }
 
 /* The empty run of the tab bar is a target, so it needs to fill the axis. */
