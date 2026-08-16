@@ -177,3 +177,9 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .pres mark { background:rgba(232,180,76,.35); color:inherit; border-radius:2px; }
 .palfoot { padding:.35rem .7rem; font-size:.62rem; color:var(--m-dim);
            border-top:1px solid var(--m-line); background:var(--m-bg); display:flex; gap:.9rem; }
+
+/* Status dots: state readable from across the window, not only up close. */
+.sdot { width:6px; height:6px; border-radius:50%; flex:0 0 auto; background:transparent; }
+.sdot.run { background:var(--m-acc); }
+.sdot.ok { background:var(--m-grn); }
+.sdot.err { background:var(--m-red); }

@@ -31,14 +31,17 @@ export class Pane {
   private webgl: WebglAddon | null = null;
   private onTitle?: (p: Pane) => void;
   private onCwd?: (p: Pane) => void;
+  private onStatus?: (p: Pane) => void;
 
   constructor(
     theme: MarlinTheme,
     onTitle?: (p: Pane) => void,
     onCwd?: (p: Pane) => void,
+    onStatus?: (p: Pane) => void,
   ) {
     this.onTitle = onTitle;
     this.onCwd = onCwd;
+    this.onStatus = onStatus;
     this.el = document.createElement("div");
     this.el.className = "pane-term";
 
@@ -99,6 +102,24 @@ export class Pane {
       if (this.pinned || !t) return;
       this.name = t;
       this.onTitle?.(this);
+    });
+
+    // OSC 133: semantic prompt marks. The shell says "a command started" and
+    // "it exited with N", and Marlin gets running/ok/failed state without
+    // parsing a single character of your command line. This is the line the
+    // whole design rests on: the shell owns the language, the terminal owns
+    // the marks.
+    this.term.parser.registerOscHandler(133, (data) => {
+      const [kind, arg] = data.split(";");
+      if (kind === "C") {
+        this.status = "run";
+        this.onStatus?.(this);
+      } else if (kind === "D") {
+        const code = Number(arg ?? "0");
+        this.status = Number.isFinite(code) && code !== 0 ? "err" : "ok";
+        this.onStatus?.(this);
+      }
+      return true;
     });
 
     // OSC 7 carries the working directory, and it is the single cheapest signal

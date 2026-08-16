@@ -64,6 +64,30 @@ function paneByPty(id: number): Pane | undefined {
   return allPanes().find((p) => p.ptyId === id);
 }
 
+/**
+ * A dot appears only when a pane knows something you do not, and a tab shows
+ * the most urgent state among its panes. Focusing a pane clears its finished
+ * and failed dots, because looking at it counts as reading it. Without that
+ * rule the window fills with dots you have already seen and they stop meaning
+ * anything.
+ */
+const RANK: Record<string, number> = { err: 3, run: 1, ok: 0 };
+const DOT_TIP: Record<string, string> = {
+  run: "running",
+  ok: "finished cleanly",
+  err: "last command failed",
+};
+
+function tabStatus(t: Tab): string | null {
+  let best: string | null = null;
+  for (const l of leaves(t.root)) {
+    const s = isTerm(l.pane) ? l.pane.status : null;
+    if (!s) continue;
+    if (!best || (RANK[s] ?? 0) > (RANK[best] ?? 0)) best = s;
+  }
+  return best;
+}
+
 /** A tab is named after its focused pane, and follows focus, until you name it
  *  yourself. Then it is pinned and the shell stops touching it. */
 function tabLabel(t: Tab): string {
@@ -98,6 +122,11 @@ function renderTabs(): void {
     b.setAttribute("aria-selected", i === app.active ? "true" : "false");
     b.tabIndex = 0;
 
+    const dot = document.createElement("span");
+    const st = tabStatus(t);
+    dot.className = `sdot${st ? ` ${st}` : ""}`;
+    if (st) dot.title = DOT_TIP[st];
+
     const idx = document.createElement("span");
     idx.className = "idx";
     idx.textContent = String(i + 1);
@@ -115,7 +144,7 @@ function renderTabs(): void {
       closeTab(i);
     });
 
-    b.append(idx, lbl, x);
+    b.append(dot, idx, lbl, x);
     b.addEventListener("click", () => selectTab(i));
     return b;
   });
@@ -151,6 +180,8 @@ function focusPane(p: Surface): void {
   app.focused = p;
   for (const l of leaves(curTab().root)) l.pane.el.classList.toggle("focus", l.pane === p);
   p.focus();
+  // Looking at it counts as reading it.
+  if (isTerm(p) && (p.status === "ok" || p.status === "err")) p.status = null;
   if (isTerm(p) && p.cwd) {
     void sidebar.setCwd(p.cwd);
     palette.setRoot(p.cwd);
@@ -163,8 +194,12 @@ async function makePane(): Promise<Pane> {
     app.theme,
     () => refreshChrome(),
     (p) => {
-      if (p === app.focused) void sidebar.setCwd(p.cwd);
+      if (p === app.focused) {
+        void sidebar.setCwd(p.cwd);
+        palette.setRoot(p.cwd);
+      }
     },
+    () => refreshChrome(),
   );
   pane.el.addEventListener("mousedown", () => focusPane(pane));
   pane.term.attachCustomKeyEventHandler(handleShortcut);
