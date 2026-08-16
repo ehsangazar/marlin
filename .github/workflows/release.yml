@@ -26,9 +26,15 @@ on:
   # stop meaning anything.
   workflow_dispatch:
     inputs:
+      # Optional, and that is load-bearing for dry runs. Leave it empty and the
+      # workflow builds the branch you dispatched from, which is the tree you
+      # are about to tag. The first dry run was given v0.1.1 and dutifully
+      # tested the previous night's code: it failed on a clippy lint that had
+      # already been fixed on main. A rehearsal of the wrong tree is worse than
+      # no rehearsal, because it reports a problem you have already solved.
       tag:
-        description: "An existing tag to build, e.g. v0.1.2"
-        required: true
+        description: "Existing tag to build, e.g. v0.1.2. Leave EMPTY for a dry run of the current branch."
+        required: false
       dry_run:
         description: "Build and list the installers, upload nothing"
         type: boolean
@@ -61,6 +67,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # `tag` is optional so dry runs can build a branch, which means a real
+          # dispatch can reach here with TAG set to a branch name. Releasing
+          # "main" would create a junk release that the update feed could then
+          # be pointed at, so refuse rather than improvise.
+          case "$TAG" in
+            v[0-9]*) ;;
+            *) echo "::error::TAG is '$TAG', which is not a version tag. Pass tag=vX.Y.Z, or set dry_run for a branch build."; exit 1 ;;
+          esac
           V="${TAG#v}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG already exists, reusing it"

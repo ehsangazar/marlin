@@ -9,6 +9,11 @@ version carries everything else.
 ## [Unreleased]
 
 ### Added
+- `⌃⇥` and `⌃⇧⇥` cycle tabs, alongside the existing `⌘]` and `⌘[`. Two bindings for one action
+  on purpose: the rest of this key map is iTerm2's, but Ctrl+Tab is what browsers, editors and
+  Windows Terminal use, and it costs the shell nothing because a tty has no encoding for it.
+  Next Tab and Previous Tab are now in the command palette too, where tab navigation had never
+  appeared at all.
 - Every pane wears a title bar showing its name and status dot. Double-click it to rename the
   pane, which pins the name so the shell stops changing it. The bar is also the drag handle,
   replacing the grip that only appeared on hover. `pane_titles = false` under `[layout]`, or
@@ -37,8 +42,8 @@ version carries everything else.
   lists its branch, how far ahead or behind it is and how many files have changed, expandable to
   the files themselves. The scan runs in parallel in Rust, so nine repositories cost one call.
 - Quitting asks first, from every route: `⌘W` on the last pane, `⌘Q`, the red button and the
-  menu's Quit all reach one confirmation. The dialog names what is live — panes, tabs, what is
-  still running, what is waiting, what has unsaved changes — because quitting is only a real
+  menu's Quit all reach one confirmation. The dialog names what is live: panes, tabs, what is
+  still running, what is waiting, what has unsaved changes, because quitting is only a real
   decision if you can see what you are throwing away.
 
 ### Fixed

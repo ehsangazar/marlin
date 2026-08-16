@@ -13,7 +13,7 @@
   two is just what happens when you press the second key. Closing a pane collapses its parent
   and gives the space back to its sibling.
 - **Tabs with a three-state bar.** `⌘⇧B` cycles top, side, hidden. `⌘T`, `⌘W`, `⌘[`, `⌘]`,
-  `⌘1`–`⌘9`.
+  `⌘1`–`⌘9`, and `⌃⇥` / `⌃⇧⇥` to cycle, which is what most people's fingers already do.
 - **An explorer and real git status.** Branch, ahead count, merge conflicts, staged and changed,
   with stage, unstage and discard on each row. It shells out to **your** git.
 - **Workspaces.** A directory holding several repositories shows as repositories rather than
@@ -168,7 +168,7 @@ On **Windows**, SmartScreen shows "Windows protected your PC". Choose **More inf
 
 Building from source avoids the question on both, and is what we would do in your position.
 
-> **Windows is built and started, not lived in — and read the tense here carefully.** Two
+> **Windows is built and started, not lived in, and read the tense here carefully.** Two
 > workflows exist. [`ci.yml`](.github/workflows/ci.yml) compiles, clippies and tests on macOS,
 > Linux and Windows on every push. [`release.yml`](.github/workflows/release.yml) builds the
 > installers above on macOS and Windows for every tag, then installs the Windows one silently on

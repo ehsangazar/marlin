@@ -825,6 +825,23 @@ function closeTab(i: number): void {
 }
 
 /**
+ * Move `delta` tabs, wrapping at both ends.
+ *
+ * Bound twice, deliberately. `⌘]` and `⌘[` are iTerm2's, which is where the
+ * rest of this key map comes from; Ctrl+Tab is what browsers, editors and
+ * Windows Terminal all use. People arrive with one or the other already in
+ * their fingers and neither is worth making them relearn.
+ *
+ * A single tab is not a no-op by accident: cycling would select the tab you are
+ * already on, re-render, and steal focus back from whatever had it.
+ */
+function cycleTab(delta: number): void {
+  const n = app.tabs.length;
+  if (n < 2) return;
+  selectTab((app.active + delta + n) % n);
+}
+
+/**
  * Returning false stops xterm handling the event, which is how a shortcut is
  * taken before it reaches the shell.
  */
@@ -853,6 +870,19 @@ function handleShortcut(e: KeyboardEvent): boolean {
     void renameFocused(e.shiftKey);
     return false;
   }
+
+  // Ctrl+Tab, taken before the ⌘ gate below because it is the only shortcut
+  // here that is not a ⌘ combination.
+  //
+  // Safe to take from the shell: a tty has no encoding for Ctrl+Tab. Tab is
+  // already Ctrl+I, so the modifier has nowhere to go in the byte stream and
+  // nothing downstream ever receives it. Contrast Ctrl+D or Ctrl+C, which are
+  // real control characters and must never be intercepted.
+  if (e.ctrlKey && e.key === "Tab") {
+    cycleTab(e.shiftKey ? -1 : 1);
+    return false;
+  }
+
   if (!e.metaKey) return true;
   const k = e.key.toLowerCase();
 
@@ -916,11 +946,11 @@ function handleShortcut(e: KeyboardEvent): boolean {
     return false;
   }
   if (k === "]" || (k === "}" && e.shiftKey)) {
-    selectTab((app.active + 1) % app.tabs.length);
+    cycleTab(1);
     return false;
   }
   if (k === "[" || (k === "{" && e.shiftKey)) {
-    selectTab((app.active - 1 + app.tabs.length) % app.tabs.length);
+    cycleTab(-1);
     return false;
   }
   if (k >= "1" && k <= "9") {
@@ -1215,6 +1245,10 @@ async function boot(): Promise<void> {
     { label: "Split Vertically", key: "⌘D", run: () => void doSplit("row") },
     { label: "Split Horizontally", key: "⌘⇧D", run: () => void doSplit("col") },
     { label: "New Tab", key: "⌘T", run: () => void newTab() },
+    // Tab navigation was bound to ⌘] and ⌘[ but appeared in neither the palette
+    // nor any menu, so the only way to find it was to already know it.
+    { label: "Next Tab", key: "⌃⇥", run: () => cycleTab(1) },
+    { label: "Previous Tab", key: "⌃⇧⇥", run: () => cycleTab(-1) },
     { label: "Close Pane", key: "⌘W", run: closeFocused },
     { label: "Rename Pane", key: "F2", run: () => void renameFocused(false) },
     { label: "Rename Tab", key: "⇧F2", run: () => void renameFocused(true) },
