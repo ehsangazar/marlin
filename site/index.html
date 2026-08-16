@@ -60,7 +60,7 @@
   .btn:hover{border-color:var(--acc)}
   .btn.primary{background:var(--acc);border-color:var(--acc);color:#06101F;font-weight:600}
 
-  section{padding-block:clamp(2.4rem,6vw,4rem);border-top:1px solid var(--line)}
+  section{padding-block:clamp(3.4rem,7.5vw,6rem);border-top:1px solid var(--line)}
   .head{display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
   .head h2{font-size:clamp(1.35rem,3.4vw,1.9rem);letter-spacing:-.02em}
   .head .note{font-family:var(--mono);font-size:.74rem;color:var(--dim);
@@ -94,13 +94,13 @@
 
   .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:2rem}
 
-  footer{border-top:1px solid var(--line);padding-block:2.2rem 3rem;color:var(--dim);
+  footer{border-top:1px solid var(--line);padding-block:3.6rem 3rem;color:var(--dim);
          font-family:var(--mono);font-size:.76rem}
   footer .wrap{display:flex;gap:1rem;justify-content:space-between;flex-wrap:wrap}
   footer a{color:var(--dim)}
   /* Spacing: give each block room to be its own thing. A section that only has
      one padding value ends up with its heading crowding what it introduces. */
-  section{padding-block:clamp(3rem,6.5vw,4.6rem)}
+  section{padding-block:clamp(4.2rem,8vw,7rem)}
   .head{margin-bottom:1.8rem}
   .head+p{margin-bottom:1.4rem}
   section>p+p{margin-top:-.35rem}
@@ -477,19 +477,19 @@
     ["Tokyo Night",{bg:"#161721",bar:"#12131B",chrome:"#0F1017",line:"#3B4261",fg:"#D5DCF7",dim:"#7E88B8",acc:"#8DB0F9",vio:"#C7AAF9",grn:"#AEDA7C",yel:"#EBBC7A",red:"#FF8A9F",cyn:"#93D9FF"}],
     ["Catppuccin Latte",{bg:"#FFFFFF",bar:"#E9ECF2",chrome:"#DEE2EA",line:"#BCC0CC",fg:"#363950",dim:"#6B6E82",acc:"#0F52E0",vio:"#7526E0",grn:"#2F8A1F",yel:"#B0700F",red:"#C00A2F",cyn:"#0E7C74"}]
   ];
-  var REPOS = ["clubcp","gazar","hub","marlin","notes","parenting"];
+  var REPOS = ["beacon-api","driftwood","keel-ui","lantern","meridian","sonar-cli"];
   var FILES = [
-    ["Cargo.toml","toml","<span class='da'>[dependencies]</span>\ntauri = <span class='dg'>\"2\"</span>\nportable-pty = <span class='dg'>\"0.9\"</span>\nignore = <span class='dg'>\"0.4\"</span>"],
-    ["main.rs","rs","<span class='dv'>fn</span> <span class='da'>main</span>() {\n    marlin_lib::<span class='da'>run</span>()\n}"],
-    ["marlin.toml","toml","<span class='da'>[appearance]</span>\ntheme = <span class='dg'>\"Marlin Dark\"</span>\ncursor_blink = <span class='dy'>false</span>\n\n<span class='da'>[layout]</span>\ntab_bar = <span class='dg'>\"top\"</span>"],
-    ["README.md","md","<span class='da'># marlin</span>\n\nA terminal built for running\ncoding agents.\n\n<span class='dd'>No cloud. No telemetry.</span>"]
+    ["Cargo.toml","toml","<span class='da'>[dependencies]</span>\naxum = <span class='dg'>\"0.8\"</span>\ntokio = <span class='dg'>\"1\"</span>\nserde = <span class='dg'>\"1\"</span>"],
+    ["main.rs","rs","<span class='dv'>fn</span> <span class='da'>main</span>() {\n    beacon::<span class='da'>serve</span>(<span class='dg'>\"0.0.0.0:8080\"</span>)\n}"],
+    ["config.toml","toml","<span class='da'>[server]</span>\nport = <span class='dy'>8080</span>\nworkers = <span class='dy'>4</span>\n\n<span class='da'>[cache]</span>\nttl_seconds = <span class='dy'>300</span>"],
+    ["README.md","md","<span class='da'># beacon-api</span>\n\nEdge service for the harbour\nfleet. Rust, axum, one binary.\n\n<span class='dd'>Demo data. Not a real project.</span>"]
   ];
-  var DIFF = "<span class='dhun'>@@ -18,7 +18,9 @@</span>\n <span class='dd'>pub fn new(device: &Device) -> Self {</span>\n<span class='ddel'>-    // one atlas per pane</span>\n<span class='dadd'>+    // one atlas per WINDOW: panes share glyphs,</span>\n<span class='dadd'>+    // which is most of the per-pane memory</span>\n <span class='dd'>}</span>";
-  var SHELL = "<span class='dg'>~/marlin</span> <span class='da'>❯</span> ";
+  var DIFF = "<span class='dhun'>@@ -42,7 +42,9 @@ impl Cache</span>\n <span class='dd'>pub fn get(&self, key: &str) -> Option&lt;Vec&lt;u8&gt;&gt; {</span>\n<span class='ddel'>-    self.map.lock().unwrap().get(key).cloned()</span>\n<span class='dadd'>+    let now = Instant::now();</span>\n<span class='dadd'>+    self.map.lock().ok()?.get(key).filter(|e| e.until &gt; now)</span>\n <span class='dd'>}</span>";
+  var SHELL = "<span class='dg'>~/beacon-api</span> <span class='da'>❯</span> ";
   var BODIES = {
     claude: "<span class='dv'>✻</span> <span class='dd'>Read</span> src/render/atlas.rs\n<span class='dv'>✻</span> <span class='dd'>Editing</span> 3 files\n\n<span class='dy'>▶ Waiting for your approval</span>\n  <span class='dd'>[y] approve   [n] reject</span>",
     build: SHELL + "cargo build --release\n<span class='dd'>   Compiling</span> marlin v0.1.0\n<span class='dg'>    Finished</span> in 41.2s\n\n" + SHELL + "<span class='dcur'></span>",
-    test:  SHELL + "cargo test\n<span class='dr'>error</span>: names must survive OSC 2\n<span class='dd'>1 failed; 41 passed</span>\n\n" + SHELL + "<span class='dcur'></span>",
+    test:  SHELL + "cargo test\n<span class='dr'>error</span>: cache entry outlived its ttl\n<span class='dd'>1 failed; 68 passed</span>\n\n" + SHELL + "<span class='dcur'></span>",
     log:   SHELL + "tail -f render.log\n<span class='dd'>frame</span> 0.41ms <span class='dd'>damage 2 cells</span>\n<span class='dd'>frame skipped, no damage</span>",
     shell: SHELL + "<span class='dcur'></span>"
   };
@@ -582,7 +582,7 @@
     t.innerHTML = "";
     var h = document.createElement("div");
     h.className = "dhead";
-    h.innerHTML = '<span>~/Projects/merge</span><span class="ok2">.claude ✓</span>';
+    h.innerHTML = '<span>~/Projects/harbour</span><span class="ok2">.claude ✓</span>';
     t.appendChild(h);
 
     var s1 = document.createElement("div"); s1.className = "dsec"; s1.textContent = "Repositories";
@@ -592,13 +592,14 @@
     var s2 = document.createElement("div"); s2.className = "dsec"; s2.textContent = "Explorer";
     t.appendChild(s2);
     t.appendChild(row("dir", "▪", "src"));
+    t.appendChild(row("dir", "▪", "migrations"));
     FILES.forEach(function (f) {
       t.appendChild(row("", "•", f[0], function () { openFile(f); }, st.sel === f[0]));
     });
 
     var s3 = document.createElement("div"); s3.className = "dsec"; s3.textContent = "Source control · 1";
     t.appendChild(s3);
-    t.appendChild(row("", "•", "atlas.rs", function () { openDiff(); }, st.sel === "atlas.rs"));
+    t.appendChild(row("", "•", "cache.rs", function () { openDiff(); }, st.sel === "cache.rs"));
   }
 
   function nodeEl(n) {
@@ -674,7 +675,7 @@
     draw();
   }
   function openFile(f) { takeover(f[0], f[2], "read-only"); }
-  function openDiff() { takeover("atlas.rs", DIFF, "diff"); }
+  function openDiff() { takeover("cache.rs", DIFF, "diff"); }
   function restore() {
     if (!st.stash) return;
     tab().root = st.stash; st.stash = null; st.sel = "";
