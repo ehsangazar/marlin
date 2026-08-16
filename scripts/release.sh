@@ -24,6 +24,9 @@ perl -0pi -e "s/## \[Unreleased\]/## [Unreleased]\n\n## [$V] - $DATE/" CHANGELOG
 # Refresh Cargo.lock so the version bump is recorded rather than left stale.
 (cd src-tauri && cargo update -p marlin --precise "$V" 2>/dev/null || cargo check -q >/dev/null 2>&1 || true)
 
+# Regenerate the update feed so it cannot describe a release that is not this one.
+node scripts/version-json.mjs
+
 git add -A
 git commit -q -m "Release v$V"
 git tag -a "v$V" -m "Marlin v$V"

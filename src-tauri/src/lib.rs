@@ -3,6 +3,7 @@ mod fs;
 mod log;
 mod git;
 mod pty;
+mod update;
 
 use pty::Shared;
 use tauri::{AppHandle, Manager, State};
@@ -40,6 +41,23 @@ fn fs_walk(path: String) -> Vec<fs::Entry> {
 #[tauri::command]
 fn fs_grep(path: String, query: String) -> Vec<fs::Hit> {
     fs::grep(&path, &query, 200)
+}
+
+#[tauri::command]
+fn check_update() -> Result<update::UpdateInfo, String> {
+    update::check().map_err(|e| e.to_string())
+}
+
+/// Install and relaunch in one call, because the two halves are not separately
+/// useful: an app that has been replaced on disk but is still running the old
+/// code is a state nobody wants to be left in.
+#[tauri::command]
+fn install_update(app: AppHandle, url: String) -> Result<(), String> {
+    let installed = update::install(&url).map_err(|e| e.to_string())?;
+    update::relaunch(&installed).map_err(|e| e.to_string())?;
+    log::mark_clean_exit();
+    app.exit(0);
+    Ok(())
 }
 
 #[tauri::command]
@@ -114,6 +132,11 @@ fn git_status(cwd: String) -> Result<git::GitStatus, String> {
 }
 
 #[tauri::command]
+fn git_workspace(root: String) -> Vec<git::RepoStatus> {
+    git::workspace(&root)
+}
+
+#[tauri::command]
 fn git_diff(cwd: String, path: String, staged: bool) -> Result<String, String> {
     git::diff(&cwd, &path, staged).map_err(|e| e.to_string())
 }
@@ -184,6 +207,8 @@ pub fn run() {
             fs_detect,
             fs_walk,
             fs_grep,
+            check_update,
+            install_update,
             quit_app,
             log_write,
             log_diagnostics,
@@ -198,6 +223,7 @@ pub fn run() {
             fs_home,
             fs_display,
             git_status,
+            git_workspace,
             git_diff,
             git_stage,
             git_unstage,

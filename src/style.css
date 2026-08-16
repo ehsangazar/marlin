@@ -215,6 +215,10 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
              border-radius:50%; background:var(--m-dim); }
 .sw[aria-pressed="true"] { background:var(--m-acc); }
 .sw[aria-pressed="true"]::after { left:17px; background:#06101F; }
+/* The update button sits in a settings row, not a viewer header bar, so it
+   needs a hit target the same size as the switches beside it. */
+.setrow .vbtn { flex:0 0 auto; font-size:.66rem; padding:.25rem .5rem; }
+.setrow .vbtn:disabled { opacity:.5; cursor:default; border-color:var(--m-line); color:var(--m-dim); }
 .sheetnote { padding:.55rem .9rem; font-size:.62rem; color:var(--m-dim);
              border-top:1px solid var(--m-line); background:var(--m-bg); }
 
@@ -366,3 +370,16 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .askbtn.primary { background:var(--m-acc); border-color:var(--m-acc); color:#06101F; font-weight:600; }
 .askbtn.primary.danger { background:var(--m-red); border-color:var(--m-red); }
 .askbtn:focus-visible { outline:2px solid var(--m-acc); outline-offset:2px; }
+
+/* Workspace repo rows: branch, ahead/behind, and a change count that is a
+   number when it matters and a tick when it does not. */
+.trow .br { font-size:.6rem; color:var(--m-dim); background:var(--m-line); border-radius:3px;
+            padding:0 .28rem; flex:0 0 auto; max-width:96px; overflow:hidden;
+            text-overflow:ellipsis; white-space:nowrap; margin-left:auto; }
+.trow .ab { font-size:.58rem; color:var(--m-cyn); flex:0 0 auto; }
+.trow .dirty { font-size:.6rem; color:var(--m-yel); flex:0 0 auto; min-width:14px; text-align:right; }
+.trow .dirty.conf { color:var(--m-red); }
+.trow .clean { font-size:.6rem; color:var(--m-grn); flex:0 0 auto; min-width:14px; text-align:right; }
+.tsec .shint { margin-left:.5rem; font-size:.55rem; color:var(--m-dim); opacity:.75;
+               text-transform:none; letter-spacing:0; }
+.tsec .cnt+.shint { margin-left:.4rem; }

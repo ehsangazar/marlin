@@ -240,19 +240,36 @@ pub fn workspace(root: &str) -> Vec<RepoStatus> {
 mod tests {
     /// Not a unit test of pure logic. The parsing was never the risky part; the
     /// risky part is whether the scan finds real repositories on a real disk,
-    /// which is what silently returned nothing. Point it somewhere real with
-    /// `MARLIN_SCAN_ROOT` and it becomes a genuine check.
+    /// which is what silently returned nothing.
+    ///
+    /// So: a real directory and a real `git`, but a temporary one it builds
+    /// itself. Pointing the default at `..` made the result depend on how the
+    /// person running it happens to arrange their projects folder, which is a
+    /// test that passes or fails for reasons that have nothing to do with the
+    /// code.
     #[test]
     fn scans_a_directory_of_repositories() {
-        let root = std::env::var("MARLIN_SCAN_ROOT").unwrap_or_else(|_| "..".into());
-        let repos = super::workspace(&root);
-        eprintln!("root={root} repos={}", repos.len());
-        for r in &repos {
-            eprintln!(
-                "  {:<16} {:<22} +{} -{}  {} changed",
-                r.name, r.branch, r.ahead, r.behind, r.changes
-            );
+        let root = std::env::temp_dir().join(format!("marlin-scan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for name in ["alpha", "beta"] {
+            let dir = root.join(name);
+            std::fs::create_dir_all(&dir).unwrap();
+            let ok = std::process::Command::new("git")
+                .args(["init", "-q"])
+                .current_dir(&dir)
+                .status()
+                .expect("git must be installed to run this test")
+                .success();
+            assert!(ok, "could not create a repository to scan");
         }
-        assert!(!repos.is_empty(), "no repositories found under {root}");
+        // A plain directory alongside them, so "finds repositories" cannot pass
+        // by finding everything.
+        std::fs::create_dir_all(root.join("just-a-folder")).unwrap();
+
+        let repos = super::workspace(&root.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&root);
+
+        let names: Vec<&str> = repos.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["alpha", "beta"], "the scan found {names:?}");
     }
 }

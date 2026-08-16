@@ -9,14 +9,33 @@ version carries everything else.
 ## [Unreleased]
 
 ### Added
+- Dragging files in from Finder types their paths into the pane you dropped them on, quoted for
+  the shell and followed by a space, so a drop finishes a half-written command instead of
+  running one. The pane under the cursor lights up while the drag is over it.
+- Check for updates in Settings, and the button that tells you a version exists is the button
+  that installs it: it downloads the disk image, replaces the app in place and relaunches.
+  Nothing is sent but one GET to a static file.
+- A workspace panel in the sidebar. Open a folder holding several repositories and each one
+  lists its branch, how far ahead or behind it is and how many files have changed, expandable to
+  the files themselves. The scan runs in parallel in Rust, so nine repositories cost one call.
 - Quitting asks first, from every route: `⌘W` on the last pane, `⌘Q`, the red button and the
   menu's Quit all reach one confirmation. The dialog names what is live — panes, tabs, what is
   still running, what is waiting, what has unsaved changes — because quitting is only a real
   decision if you can see what you are throwing away.
 
 ### Fixed
+- Typing was a character behind. The pty reader coalesced output by issuing a second read before
+  emitting, and a read on a pty master blocks, so the echo of every keystroke sat in a buffer
+  until the next keystroke arrived to release it. Reading and emitting are now separate threads
+  either side of a channel: asking "is there more?" is a `try_recv` that answers instantly, so a
+  lone keystroke goes straight through and a flood still collapses into one message.
+- Output split across a read boundary in the middle of a multi-byte character no longer turns it
+  into a replacement character. The incomplete tail is held for the next chunk.
 - `⌘W` on the last pane used to do nothing at all. It now reads as an attempt to quit, which is
   what it is.
+- The workspace scan test pointed at whatever happened to sit above the repository, so it passed
+  or failed on how the person running it arranges their projects folder. It builds its own
+  repositories in a temporary directory now.
 
 ## [0.1.0] - 2026-08-16
 

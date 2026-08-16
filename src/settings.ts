@@ -2,6 +2,16 @@ import { THEMES, type MarlinTheme } from "./theme";
 import { configPath, save, type Config } from "./config";
 import { invoke } from "@tauri-apps/api/core";
 
+interface UpdateInfo {
+  current: string;
+  latest: string;
+  newer: boolean;
+  notes: string;
+  url: string;
+  published: string;
+  dmg: string;
+}
+
 /**
  * One screen, grouped, no tabs and no search box, and every switch that costs
  * something says what it costs.
@@ -20,6 +30,9 @@ export class Settings {
   private onOpenFile: (path: string, name: string) => void;
   private path = "";
   private version = "";
+  private upd: UpdateInfo | null = null;
+  private updState: "idle" | "checking" | "installing" | "failed" = "idle";
+  private updError = "";
 
   constructor(
     cfg: Config,
@@ -126,6 +139,81 @@ export class Settings {
       if (Number.isFinite(n)) pick(Math.min(max, Math.max(min, n)));
     });
     return i;
+  }
+
+  private async check(): Promise<void> {
+    this.updState = "checking";
+    this.updError = "";
+    this.render();
+    try {
+      this.upd = await invoke<UpdateInfo>("check_update");
+      this.updState = "idle";
+    } catch (e) {
+      this.updState = "failed";
+      this.updError = String(e);
+    }
+    this.render();
+  }
+
+  /**
+   * The button that says an update exists is the button that installs it.
+   * Making you find the download yourself is how an update check turns into a
+   * notification you learn to ignore.
+   */
+  private async install(): Promise<void> {
+    const u = this.upd;
+    if (!u?.newer) return;
+    // A release that published a page but no disk image has nothing to
+    // install, so send you to the page rather than fail at a button.
+    if (!u.dmg) {
+      void invoke("open_external", { url: u.url }).catch(() => {});
+      return;
+    }
+    this.updState = "installing";
+    this.updError = "";
+    this.render();
+    try {
+      // On success this never returns: the bundle is replaced and the app
+      // relaunches out from under the webview.
+      await invoke("install_update", { url: u.dmg });
+    } catch (e) {
+      this.updState = "failed";
+      this.updError = String(e);
+      this.render();
+    }
+  }
+
+  private updateNote(): string {
+    if (this.updState === "checking") return "asking the feed";
+    if (this.updState === "installing") return "downloading, replacing the app, then restarting";
+    if (this.updState === "failed") return this.updError;
+    const u = this.upd;
+    if (!u) return "one GET to a static file. No identifiers, nothing about you";
+    if (!u.newer) return `up to date${u.latest ? ` at ${u.latest}` : ""}`;
+    const first = u.notes.split("\n")[0] ?? "";
+    return `${u.latest} is out${u.published ? `, ${u.published}` : ""}${first ? `: ${first}` : ""}`;
+  }
+
+  private updateButton(): HTMLElement {
+    const b = document.createElement("button");
+    const busy = this.updState === "checking" || this.updState === "installing";
+    const ready = this.upd?.newer === true;
+    b.className = ready && !busy ? "vbtn primary" : "vbtn";
+    b.disabled = busy;
+    b.textContent =
+      this.updState === "checking"
+        ? "Checking…"
+        : this.updState === "installing"
+          ? "Installing…"
+          : ready
+            ? this.upd?.dmg
+              ? `Update to ${this.upd.latest}`
+              : `Get ${this.upd?.latest}`
+            : this.updState === "failed"
+              ? "Try again"
+              : "Check now";
+    b.addEventListener("click", () => void (ready ? this.install() : this.check()));
+    return b;
   }
 
   private group(label: string): HTMLElement {
@@ -265,6 +353,9 @@ export class Settings {
         this.toggle(c.notifications, () => this.commit({ notifications: !c.notifications })),
       ),
     );
+
+    body.appendChild(this.group("Updates"));
+    body.appendChild(this.row("Check for updates", this.updateNote(), this.updateButton()));
 
     card.appendChild(body);
 

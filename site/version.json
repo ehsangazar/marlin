@@ -1,0 +1,6 @@
+{
+  "version": "0.1.0",
+  "published": "2026-08-16",
+  "url": "https://github.com/ehsangazar/marlin/releases/tag/v0.1.0",
+  "notes": "Nesting splits: a tab holds a tree, so any mix of vertical and horizontal falls out of\nTabs with a three-state bar: top, side, hidden, cycled with one key.\nExplorer sidebar with file-type icons, plus workspace detection so a directory holding\nSource control: branch, ahead count, merge conflicts, staged and changed, with stage,\nFile and diff viewer that takes over the tab in three columns (tree, file, terminal) and\nEditing with conflict detection: a write is refused if the file changed on disk since it"
+}

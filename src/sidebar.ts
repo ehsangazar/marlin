@@ -24,6 +24,16 @@ export interface GitStatus {
   conflicts: GitFile[];
 }
 
+export interface RepoStatus {
+  name: string;
+  path: string;
+  branch: string;
+  ahead: number;
+  behind: number;
+  changes: number;
+  conflicts: number;
+}
+
 export interface Project {
   repos: string[];
   has_claude: boolean;
@@ -54,6 +64,9 @@ export class Sidebar {
   private expanded = new Set<string>();
   private explorerOpen = true;
   private reposOpen = true;
+  private repos: RepoStatus[] = [];
+  private openRepos = new Set<string>();
+  private repoFiles = new Map<string, GitStatus>();
   private scOpen = true;
   private status: GitStatus | null = null;
   private project: Project | null = null;
@@ -82,9 +95,18 @@ export class Sidebar {
     try {
       this.project = await invoke<Project>("fs_detect", { path: this.cwd });
       this.status = await invoke<GitStatus>("git_status", { cwd: this.cwd });
+      // Branch and change count for every repo in one call, run in parallel on
+      // the Rust side. Nine repositories serially is nine round trips for
+      // something the eye reads as a single list.
+      this.repos =
+        (this.project?.repos.length ?? 0) > 1 && !this.project?.is_repo
+          ? await invoke<RepoStatus[]>("git_workspace", { root: this.cwd })
+          : [];
+      this.repoFiles.clear();
     } catch {
       this.project = null;
       this.status = null;
+      this.repos = [];
     }
     await this.render();
   }
@@ -162,7 +184,7 @@ export class Sidebar {
     this.h.terminalHere(dir);
   }
 
-  private section(label: string, open: boolean, count: number | null, toggle: () => void): HTMLElement {
+  private section(label: string, open: boolean, count: number | null, toggle: () => void, hint?: string): HTMLElement {
     const s = document.createElement("div");
     s.className = "tsec";
     const tw = document.createElement("span");
@@ -175,6 +197,12 @@ export class Sidebar {
       c.className = "cnt";
       c.textContent = String(count);
       s.appendChild(c);
+    }
+    if (hint) {
+      const hn = document.createElement("span");
+      hn.className = "shint";
+      hn.textContent = hint;
+      s.appendChild(hn);
     }
     s.addEventListener("click", toggle);
     return s;
@@ -214,7 +242,8 @@ export class Sidebar {
     }
   }
 
-  private gitRow(f: GitFile, staged: boolean): HTMLElement {
+  private gitRow(f: GitFile, staged: boolean, repoPath?: string): HTMLElement {
+    const cwd = repoPath ?? this.cwd;
     const acts: HTMLElement[] = [];
     const mk = (id: "stage" | "unstage" | "discard", glyph: string, tip: string, danger = false) => {
       const a = document.createElement("span");
@@ -223,7 +252,7 @@ export class Sidebar {
       a.title = tip;
       a.addEventListener("click", (e) => {
         e.stopPropagation();
-        this.h.gitAction(id, this.cwd, f.path);
+        this.h.gitAction(id, cwd, f.path);
       });
       return a;
     };
@@ -243,14 +272,28 @@ export class Sidebar {
     return this.row(1, {
       icon: icon(f.name, "file"),
       label: f.name,
-      title: f.path,
+      title: `${cwd}/${f.path}`,
       trailing: acts,
       onClick: () => {
         this.selected = f.path;
-        this.h.openDiff(this.cwd, f.path, f.name, staged);
+        this.h.openDiff(cwd, f.path, f.name, staged);
         void this.render();
       },
     });
+  }
+
+  /** Fetch one repo's files, only when it is expanded. Computing what is not
+   *  visible is how a sidebar becomes a background job. */
+  private async renderRepo(r: RepoStatus): Promise<void> {
+    if (this.openRepos.has(r.path) && !this.repoFiles.has(r.path)) {
+      await this.render();
+      try {
+        this.repoFiles.set(r.path, await invoke<GitStatus>("git_status", { cwd: r.path }));
+      } catch {
+        /* leave it unexpanded rather than showing a lie */
+      }
+    }
+    await this.render();
   }
 
   async render(): Promise<void> {
@@ -269,28 +312,98 @@ export class Sidebar {
     }
     frag.appendChild(head);
 
-    // A directory holding several repositories is a workspace, and treating it
-    // as one project is wrong about the most common case.
-    const repos = this.project?.repos ?? [];
-    if (repos.length > 1 && !this.project?.is_repo) {
+    // A directory of repositories is a workspace, and each one opens where it
+    // sits. Making you navigate into a repo to see whether it is dirty defeats
+    // the point of showing them together.
+    if (this.repos.length > 1) {
+      const total = this.repos.reduce((n, r) => n + r.changes + r.conflicts, 0);
       frag.appendChild(
-        this.section("Repositories", this.reposOpen, repos.length, () => {
+        this.section("Repositories", this.reposOpen, this.repos.length, () => {
           this.reposOpen = !this.reposOpen;
           void this.render();
-        }),
+        }, total ? `${total} changed` : "all clean"),
       );
+
       if (this.reposOpen) {
-        for (const r of repos) {
+        for (const r of this.repos) {
+          const open = this.openRepos.has(r.path);
+          const trailing: HTMLElement[] = [];
+
+          if (r.branch) {
+            const br = document.createElement("span");
+            br.className = "br";
+            br.textContent = r.branch;
+            br.title = r.branch;
+            trailing.push(br);
+          }
+          if (r.ahead || r.behind) {
+            const ab = document.createElement("span");
+            ab.className = "ab";
+            ab.textContent = [r.ahead ? `↑${r.ahead}` : "", r.behind ? `↓${r.behind}` : ""]
+              .filter(Boolean)
+              .join("");
+            trailing.push(ab);
+          }
+          const n = document.createElement("span");
+          n.className = r.conflicts ? "dirty conf" : r.changes ? "dirty" : "clean";
+          n.textContent = r.conflicts
+            ? `!${r.conflicts}`
+            : r.changes
+              ? String(r.changes)
+              : "✓";
+          n.title = r.conflicts
+            ? `${r.conflicts} conflicted`
+            : r.changes
+              ? `${r.changes} changed`
+              : "clean";
+          trailing.push(n);
+
           frag.appendChild(
             this.row(0, {
-              icon: icon(r, "repo"),
+              twisty: r.changes || r.conflicts ? (open ? "▾" : "▸") : "",
+              icon: icon(r.name, "repo"),
               cls: "repo",
-              label: r,
-              title: `${this.cwd}/${r}`,
+              label: r.name,
+              title: r.path,
               isDir: true,
-              onClick: () => void this.setCwd(`${this.cwd}/${r}`),
+              trailing,
+              onClick: () => {
+                if (!r.changes && !r.conflicts) return;
+                if (open) this.openRepos.delete(r.path);
+                else this.openRepos.add(r.path);
+                void this.renderRepo(r);
+              },
             }),
           );
+
+          if (open) {
+            const st = this.repoFiles.get(r.path);
+            if (!st) {
+              const l = document.createElement("div");
+              l.className = "sgh";
+              l.style.paddingLeft = "1.4rem";
+              l.textContent = "reading…";
+              frag.appendChild(l);
+            } else {
+              const group = (label: string, files: GitFile[], staged: boolean, cls = "") => {
+                if (!files.length) return;
+                const h = document.createElement("div");
+                h.className = `sgh ${cls}`;
+                h.style.paddingLeft = "1.4rem";
+                const t = document.createElement("span");
+                t.textContent = label;
+                const nn = document.createElement("span");
+                nn.className = "n";
+                nn.textContent = String(files.length);
+                h.append(t, nn);
+                frag.appendChild(h);
+                for (const f of files) frag.appendChild(this.gitRow(f, staged, r.path));
+              };
+              group("Conflicts", st.conflicts, false, "conf");
+              group("Staged", st.staged, true);
+              group("Changes", st.changes, false);
+            }
+          }
         }
       }
     }
