@@ -1,6 +1,6 @@
 //! Filesystem, and the project detection that the agent features hang off.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use serde::Serialize;

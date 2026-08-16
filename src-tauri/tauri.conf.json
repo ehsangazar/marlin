@@ -28,7 +28,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app"],
+    "targets": [
+      "app"
+    ],
     "category": "DeveloperTool",
     "shortDescription": "A terminal built for running coding agents",
     "copyright": "MIT"
