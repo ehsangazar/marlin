@@ -1,6 +1,7 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "published": "2026-08-16",
-  "url": "https://github.com/ehsangazar/marlin/releases/tag/v0.1.0",
-  "notes": "Nesting splits: a tab holds a tree, so any mix of vertical and horizontal falls out of\nTabs with a three-state bar: top, side, hidden, cycled with one key.\nExplorer sidebar with file-type icons, plus workspace detection so a directory holding\nSource control: branch, ahead count, merge conflicts, staged and changed, with stage,\nFile and diff viewer that takes over the tab in three columns (tree, file, terminal) and\nEditing with conflict detection: a write is refused if the file changed on disk since it"
+  "url": "https://github.com/ehsangazar/marlin/releases/tag/v0.1.1",
+  "dmg": "https://github.com/ehsangazar/marlin/releases/download/v0.1.1/Marlin_0.1.1_aarch64.dmg",
+  "notes": "Dragging files in from Finder types their paths into the pane you dropped them on, quoted for\nCheck for updates in Settings, and the button that tells you a version exists is the button\nA workspace panel in the sidebar. Open a folder holding several repositories and each one\nQuitting asks first, from every route: `⌘W` on the last pane, `⌘Q`, the red button and the\nTyping was a character behind. The pty reader coalesced output by issuing a second read before\nOutput split across a read boundary in the middle of a multi-byte character no longer turns it"
 }

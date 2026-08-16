@@ -1,6 +1,6 @@
 [package]
 name = "marlin"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A terminal built for running coding agents"
 repository = "https://github.com/ehsangazar/marlin"

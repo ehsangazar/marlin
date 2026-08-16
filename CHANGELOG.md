@@ -8,6 +8,8 @@ version carries everything else.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-16
+
 ### Added
 - Dragging files in from Finder types their paths into the pane you dropped them on, quoted for
   the shell and followed by a space, so a drop finishes a half-written command instead of
