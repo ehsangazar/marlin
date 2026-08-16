@@ -23,6 +23,7 @@ import { load as loadConfig, save as saveConfig, DEFAULTS, type Config } from ".
 import { Find } from "./find";
 import { menu } from "./menu";
 import { ask } from "./prompt";
+import { Reporter } from "./report";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
@@ -61,6 +62,7 @@ let palette: Palette;
 let settings: Settings;
 let find: Find;
 let dragTab: number | null = null;
+let reporter: Reporter;
 let cfg: Config = { ...DEFAULTS };
 
 const curTab = (): Tab => app.tabs[app.active] as Tab;
@@ -777,22 +779,52 @@ async function boot(): Promise<void> {
     { label: "Find in Scrollback", key: "⌘F", run: () => { if (app.focused && isTerm(app.focused)) find.open(app.focused); } },
     { label: "Clear Buffer", key: "⌘K", run: () => { if (app.focused && isTerm(app.focused)) app.focused.term.clear(); } },
     { label: "Close Other Tabs", run: () => closeOthers(app.active) },
+    { label: "Report a Bug", run: () => void reporter.openIssue("bug") },
+    { label: "Request a Feature", run: () => void reporter.openIssue("feature") },
+    {
+      label: "Open Diagnostics Log",
+      run: () =>
+        void reporter.openLog().then((p) => {
+          if (p) openViewer(new Viewer({ kind: "file", name: "marlin.log", path: p, onClose: () => closeViewer() }));
+        }),
+    },
   ];
   palette.setCommands(commands);
 
   // Footer links. Opened through the OS handler, never in the webview: a
   // terminal that can navigate its own UI to an arbitrary page is a terminal
   // with a whole class of problem it did not need.
-  const REPO = "https://github.com/ehsangazar/marlin";
+  reporter = new Reporter((n) => {
+    const el = document.getElementById("st-errors");
+    if (!el) return;
+    el.classList.toggle("on", n > 0);
+    el.textContent = n === 1 ? "1 error" : `${n} errors`;
+  });
+
   const openExternal = (url: string) => {
     void invoke("open_external", { url }).catch(() => {});
   };
   document.getElementById("lnk-bug")?.addEventListener("click", () =>
-    openExternal(`${REPO}/issues/new?labels=bug&template=`),
+    void reporter.openIssue("bug"),
   );
   document.getElementById("lnk-idea")?.addEventListener("click", () =>
-    openExternal(`${REPO}/issues/new?labels=enhancement&template=`),
+    void reporter.openIssue("feature"),
   );
+  document.getElementById("st-errors")?.addEventListener("click", () =>
+    void reporter.openIssue("bug"),
+  );
+
+  // If the last run died without saying goodbye, say so once, quietly, with a
+  // way to act on it. A crash nobody hears about is a crash nobody fixes.
+  void reporter.diagnostics().then((d) => {
+    if (!d?.crashed_last_run) return;
+    const el = document.getElementById("st-errors");
+    if (el) {
+      el.classList.add("on");
+      el.textContent = "crashed last run · report";
+    }
+    void reporter.clearCrashFlag();
+  });
   document.getElementById("lnk-sponsor")?.addEventListener("click", () =>
     openExternal("https://github.com/sponsors/ehsangazar"),
   );

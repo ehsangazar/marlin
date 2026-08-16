@@ -4,7 +4,7 @@
       <stop offset="0" stop-color="#121D2C"/>
       <stop offset="1" stop-color="#070B11"/>
     </linearGradient>
-    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#8B7BFF"/>
       <stop offset="0.5" stop-color="#4C8DFF"/>
       <stop offset="1" stop-color="#4FD1E0"/>
@@ -13,21 +13,12 @@
 
   <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
 
-  <!-- A geometric M. The centre vertex is dropped low and sharpened so the
-       counter reads as a dorsal fin rather than a plain letterform. -->
-  <path fill="url(#ink)" d="
-    M 268 762
-    L 268 262
-    L 386 262
-    L 512 512
-    L 638 262
-    L 756 262
-    L 756 762
-    L 654 762
-    L 654 448
-    L 552 650
-    L 472 650
-    L 370 448
-    L 370 762
-    Z"/>
+  <text x="512" y="560"
+        font-family="SF Mono, SFMono-Regular, Menlo, Monaco, 'Courier New', monospace"
+        font-size="248"
+        font-weight="700"
+        letter-spacing="-10"
+        fill="url(#ink)"
+        text-anchor="middle"
+        dominant-baseline="middle">Marlin</text>
 </svg>

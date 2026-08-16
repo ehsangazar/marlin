@@ -1,5 +1,6 @@
 mod config;
 mod fs;
+mod log;
 mod git;
 mod pty;
 
@@ -39,6 +40,21 @@ fn fs_walk(path: String) -> Vec<fs::Entry> {
 #[tauri::command]
 fn fs_grep(path: String, query: String) -> Vec<fs::Hit> {
     fs::grep(&path, &query, 200)
+}
+
+#[tauri::command]
+fn log_write(level: String, message: String) {
+    log::write(&level, &message);
+}
+
+#[tauri::command]
+fn log_diagnostics() -> Result<log::Diagnostics, String> {
+    log::diagnostics(200).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn log_clear_crash_flag() {
+    log::mark_clean_exit();
 }
 
 #[tauri::command]
@@ -142,6 +158,8 @@ fn pty_close(state: State<'_, Shared>, id: u32) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    log::init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
@@ -160,6 +178,9 @@ pub fn run() {
             fs_detect,
             fs_walk,
             fs_grep,
+            log_write,
+            log_diagnostics,
+            log_clear_crash_flag,
             config_load,
             config_save,
             config_path,
@@ -175,6 +196,11 @@ pub fn run() {
             git_unstage,
             git_discard
         ])
-        .run(tauri::generate_context!())
-        .expect("marlin failed to start");
+        .build(tauri::generate_context!())
+        .expect("marlin failed to start")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                log::mark_clean_exit();
+            }
+        });
 }
