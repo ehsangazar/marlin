@@ -31,3 +31,13 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
   font-size:.66rem; color:var(--m-dim); letter-spacing:.03em;
 }
 .statusbar b { color:var(--m-fg); font-weight:600; }
+
+/* The layout tree: nested splits, each a row or a column. */
+.split { display:flex; flex:1; gap:1px; min-width:0; min-height:0; background:var(--m-line); }
+.split.row { flex-direction:row; }
+.split.col { flex-direction:column; }
+.pane-term { position:relative; }
+.pane-term.focus::before {
+  content:""; position:absolute; left:0; top:0; bottom:0; width:2px;
+  background:var(--m-acc); z-index:2;
+}
