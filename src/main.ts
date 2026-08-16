@@ -44,8 +44,11 @@ function paneByPty(id: number): Pane | undefined {
 
 function refreshChrome(): void {
   els.title.textContent = app.focused ? `marlin · ${app.focused.name}` : "marlin";
-  els.stPanes.textContent = String(leaves(curTab().root).length);
   els.stTheme.textContent = app.theme.name;
+  // setTheme runs before the first tab exists, and a pane's title callback can
+  // fire during construction. Neither should have to know about boot order.
+  const tab = app.tabs[app.active];
+  els.stPanes.textContent = tab ? String(leaves(tab.root).length) : "0";
 }
 
 /** Rebuild the pane area from the tree, then re-fit. Pane elements are moved,
