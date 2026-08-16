@@ -26,6 +26,7 @@ import { ask, confirm } from "./prompt";
 import { Reporter } from "./report";
 import { notifier } from "./notify";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
@@ -493,6 +494,59 @@ function closeOthers(keep: number): void {
   selectTab(0);
 }
 
+/**
+ * A path is only safe to hand a shell bare if every character in it is inert.
+ * Single quotes are the one thing that cannot survive inside single quotes, so
+ * they are closed, escaped and reopened.
+ */
+const BARE = /^[A-Za-z0-9_@%+=:,./-]+$/;
+const shellQuote = (p: string): string =>
+  BARE.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`;
+
+function termAt(x: number, y: number): Pane | null {
+  const el = document.elementFromPoint(x, y)?.closest(".pane-term");
+  if (!el) return null;
+  return allPanes().find((p) => p.el === el) ?? null;
+}
+
+/**
+ * Files dragged in from Finder never reach the pane handlers above: Tauri
+ * intercepts an OS-level drop before the webview sees a `drop` event, so
+ * without this the drag lands nowhere and the path has to be pasted by hand.
+ * The paths are typed into the pty rather than run, with a trailing space, so
+ * a drop composes with whatever command is already half-written on the line.
+ */
+async function wireFileDrop(): Promise<void> {
+  let hot: Pane | null = null;
+  const highlight = (p: Pane | null): void => {
+    if (hot === p) return;
+    hot?.el.classList.remove("dragover");
+    p?.el.classList.add("dragover");
+    hot = p;
+  };
+
+  await getCurrentWebview()
+    .onDragDropEvent((e) => {
+      const ev = e.payload;
+      if (ev.type === "leave") return highlight(null);
+      // Drop positions arrive in physical pixels; the DOM answers in CSS ones.
+      const r = window.devicePixelRatio || 1;
+      const over = termAt(ev.position.x / r, ev.position.y / r);
+      if (ev.type !== "drop") return highlight(over);
+      highlight(null);
+      // Dropping on a viewer, or on chrome, still means the pane you are
+      // working in: the alternative is a drag that silently does nothing.
+      const pane = over ?? (app.focused && isTerm(app.focused) ? app.focused : null);
+      if (!pane || pane.ptyId === null || ev.paths.length === 0) return;
+      focusPane(pane);
+      void invoke("pty_write", {
+        id: pane.ptyId,
+        data: `${ev.paths.map(shellQuote).join(" ")} `,
+      }).catch(() => {});
+    })
+    .catch(() => {});
+}
+
 async function copySelection(p: Pane): Promise<void> {
   const sel = p.term.getSelection();
   if (sel) await navigator.clipboard.writeText(sel).catch(() => {});
@@ -774,6 +828,7 @@ async function boot(): Promise<void> {
   });
 
   applyBar();
+  await wireFileDrop();
 
   // The webview brings its own context menu. Suppressing it globally, once, is
   // what makes every custom menu below actually appear.
