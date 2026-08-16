@@ -22,7 +22,7 @@
   html{scroll-behavior:smooth}
   body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
        font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:940px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem)}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem)}
   a{color:var(--acc)}
   h1,h2,h3{font-family:var(--mono);font-weight:600;margin:0;text-wrap:balance}
   code,kbd{font-family:var(--mono)}
@@ -34,18 +34,24 @@
   .top nav a{color:var(--dim);text-decoration:none}
   .top nav a:hover{color:var(--fg)}
 
-  header{padding-block:clamp(3rem,8vw,5.5rem) clamp(2rem,5vw,3rem)}
+  header{padding-block:clamp(2.6rem,6vw,4.5rem) clamp(1.5rem,3vw,2rem)}
+  .shot{margin-top:clamp(1.8rem,4vw,2.8rem);border:1px solid var(--line);border-radius:12px;
+        overflow:hidden;background:var(--chrome);box-shadow:0 30px 70px -40px rgba(0,0,0,.95)}
+  .shot img{display:block;width:100%;height:auto}
+  .shotcap{display:flex;gap:.6rem;flex-wrap:wrap;align-items:baseline;
+           font-family:var(--mono);font-size:.72rem;color:var(--dim);margin-top:.7rem}
+  .shotcap b{color:var(--fg);font-weight:600}
   .eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.16em;text-transform:uppercase;
            color:var(--dim);display:flex;align-items:center;gap:.7rem}
   .eyebrow::after{content:"";height:1px;flex:1;background:var(--line)}
-  h1{font-size:clamp(2.2rem,6vw,3.6rem);letter-spacing:-.035em;margin:.7rem 0 0;line-height:1.03}
-  .lede{font-size:clamp(1.05rem,2.4vw,1.3rem);color:var(--dim);max-width:44ch;margin-top:1rem;line-height:1.45}
+  h1{font-size:clamp(2.2rem,5.4vw,4rem);letter-spacing:-.035em;margin:.7rem 0 0;line-height:1.03}
+  .lede{font-size:clamp(1.05rem,2.2vw,1.35rem);color:var(--dim);max-width:52ch;margin-top:1rem;line-height:1.45}
   .lede strong{color:var(--fg);font-weight:600}
+  .facts{list-style:none;display:flex;flex-wrap:wrap;gap:.5rem;padding:0;margin:1.5rem 0 0}
+  .facts li{font-family:var(--mono);font-size:.72rem;color:var(--dim);
+            border:1px solid var(--line);border-radius:100px;padding:.22rem .7rem;
+            background:var(--chrome)}
 
-  .status{margin-top:1.6rem;border:1px solid var(--yel);border-radius:8px;
-          background:rgba(240,194,95,.07);padding:.8rem 1rem;font-family:var(--mono);
-          font-size:.8rem;color:var(--yel);max-width:62ch}
-  .status b{letter-spacing:.06em;text-transform:uppercase;font-size:.72rem}
 
   .cta{display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1.6rem}
   .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.62rem 1.15rem;border-radius:7px;
@@ -59,10 +65,10 @@
   .head h2{font-size:clamp(1.35rem,3.4vw,1.9rem);letter-spacing:-.02em}
   .head .note{font-family:var(--mono);font-size:.74rem;color:var(--dim);
               letter-spacing:.06em;text-transform:uppercase}
-  p{margin:0 0 1rem;max-width:70ch}
+  p{margin:0 0 1rem;max-width:78ch}
   p:last-child{margin-bottom:0}
 
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:1px;
         background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}
   .cell{background:var(--chrome);padding:1.25rem}
   .cell h3{font-size:.95rem;margin-bottom:.45rem}
@@ -92,6 +98,167 @@
          font-family:var(--mono);font-size:.76rem}
   footer .wrap{display:flex;gap:1rem;justify-content:space-between;flex-wrap:wrap}
   footer a{color:var(--dim)}
+  /* Spacing: give each block room to be its own thing. A section that only has
+     one padding value ends up with its heading crowding what it introduces. */
+  section{padding-block:clamp(3rem,6.5vw,4.6rem)}
+  .head{margin-bottom:1.8rem}
+  .head+p{margin-bottom:1.4rem}
+  section>p+p{margin-top:-.35rem}
+  section>p+.grid,section>p+.sec,section>p+.cols,section>p+.gaps,
+  section>p+.dwin,section>p+pre{margin-top:1.7rem}
+  .grid+p,.sec+p,.cols+p{margin-top:1.6rem}
+  .cta{margin-top:1.7rem}
+  .cols>div>h3{margin-bottom:.75rem}
+  .cols pre{margin-bottom:.85rem}
+  .gaps{gap:.75rem;margin-top:.4rem}
+  .sec ul{gap:.85rem}
+  .cell{padding:1.4rem}
+  footer{margin-top:0}
+
+  /* Security table: the promise is the row heading, so it scans as a list of
+     commitments and reads as a table only when you want the detail. */
+  .tblwrap{border:1px solid var(--grn);border-radius:10px;overflow:hidden;
+           background:rgba(111,224,175,.045)}
+  .sectbl{width:100%;border-collapse:collapse;font-size:.9rem}
+  .sectbl thead th{text-align:left;font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;
+                   text-transform:uppercase;color:var(--dim);font-weight:500;
+                   padding:.75rem 1.1rem;background:rgba(255,255,255,.02);
+                   border-bottom:1px solid var(--line)}
+  .sectbl tbody th{text-align:left;font-weight:600;color:var(--fg);font-size:.9rem;
+                   padding:.95rem 1.1rem;width:34%;vertical-align:top;line-height:1.45}
+  .sectbl tbody th::before{content:"✓";color:var(--grn);font-family:var(--mono);
+                           margin-right:.6rem;font-weight:400}
+  .sectbl td{color:var(--dim);padding:.95rem 1.1rem;vertical-align:top;line-height:1.6}
+  .sectbl tbody tr+tr th,.sectbl tbody tr+tr td{border-top:1px solid var(--line)}
+  .sectbl code{font-size:.85em;color:var(--fg)}
+  @media (max-width:680px){
+    .sectbl,.sectbl tbody,.sectbl tr,.sectbl th,.sectbl td{display:block;width:auto}
+    .sectbl thead{display:none}
+    .sectbl tbody tr+tr{border-top:1px solid var(--line)}
+    .sectbl tbody th{padding-bottom:.2rem}
+    .sectbl td{padding-top:0}
+  }
+
+  /* ---- interactive demo ---------------------------------------------- */
+  .dwin{margin-top:clamp(1.6rem,3.5vw,2.4rem);--d-bg:#0A0F16;--d-bar:#0C121B;--d-chrome:#111A26;--d-line:#26333F;
+        --d-fg:#E4ECF5;--d-dim:#8497AB;--d-acc:#5C9CFF;--d-vio:#9E90FF;
+        --d-grn:#6FE0AF;--d-yel:#F0C25F;--d-red:#FF8C8C;--d-cyn:#5FDCEC;
+        background:var(--d-bg);border:1px solid var(--d-line);border-radius:11px;overflow:hidden;
+        font-family:var(--mono);font-size:.78rem;line-height:1.55;color:var(--d-fg);
+        box-shadow:0 30px 70px -45px rgba(0,0,0,.95);margin-top:1.6rem}
+  .dtitle{display:flex;align-items:center;gap:.45rem;padding:.5rem .7rem;
+          background:var(--d-chrome);border-bottom:1px solid var(--d-line)}
+  .ddot{width:10px;height:10px;border-radius:50%;background:var(--d-line)}
+  .ddot.r{background:#FF5F57}.ddot.y{background:#FEBC2E}.ddot.g{background:#28C840}
+  .dbrand{margin-left:.4rem;font-weight:600;font-size:.76rem}
+  .dname{color:var(--d-dim);font-size:.72rem}
+  .dname:not(:empty)::before{content:"·";margin:0 .4rem;opacity:.6}
+
+  .dbody{display:flex;height:420px}
+  .dbody.h{flex-direction:column}
+  .dbody.v{flex-direction:row}
+  .dbody.hidden .dtabs{display:none}
+  .dmain{flex:1;display:flex;min-width:0;min-height:0}
+
+  .dtabs{display:flex;gap:2px;background:var(--d-bar)}
+  .dbody.h .dtabs{flex-direction:row;padding:4px 4px 0;border-bottom:1px solid var(--d-line)}
+  .dbody.v .dtabs{flex-direction:column;padding:4px;border-right:1px solid var(--d-line);
+                  width:168px;flex:0 0 168px}
+  .dtab{display:flex;align-items:center;gap:.4rem;padding:.3rem .5rem;color:var(--d-dim);
+        background:none;border:0;border-radius:5px 5px 0 0;font:inherit;font-size:.72rem;
+        cursor:pointer;white-space:nowrap;text-align:left}
+  .dbody.v .dtab{border-radius:5px;width:100%}
+  .dtab[aria-selected=true]{background:var(--d-bg);color:var(--d-fg)}
+  .dbody.h .dtab[aria-selected=true]{box-shadow:inset 0 2px 0 var(--d-acc)}
+  .dbody.v .dtab[aria-selected=true]{background:var(--d-chrome);box-shadow:inset 2px 0 0 var(--d-acc)}
+  .dsdot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;background:transparent}
+  .dsdot.run{background:var(--d-acc)}.dsdot.ok{background:var(--d-grn)}.dsdot.err{background:var(--d-red)}
+
+  .dtree{width:186px;flex:0 0 186px;background:var(--d-bar);overflow:auto;
+         border-right:1px solid var(--d-line);padding-bottom:6px}
+  .dhead{display:flex;gap:.4rem;padding:.4rem .6rem;font-size:.62rem;color:var(--d-dim);
+         border-bottom:1px solid var(--d-line);margin-bottom:4px}
+  .dhead .ok2{color:var(--d-vio);margin-left:auto}
+  .dsec{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--d-dim);
+        padding:.5rem .6rem .2rem}
+  .drow{display:flex;align-items:center;gap:.35rem;padding:.1rem .5rem .1rem .6rem;
+        font-size:.7rem;color:var(--d-dim);cursor:pointer;white-space:nowrap;
+        background:none;border:0;width:100%;text-align:left;font-family:inherit}
+  .drow:hover{background:var(--d-chrome);color:var(--d-fg)}
+  .drow.sel{background:var(--d-chrome);color:var(--d-fg);box-shadow:inset 2px 0 0 var(--d-acc)}
+  .drow .di{width:12px;text-align:center;flex:0 0 auto;font-size:.6rem}
+  .drow.repo .di{color:var(--d-vio)}
+  .drow.dir .di{color:var(--d-acc)}
+
+  .dpanes{flex:1;display:flex;background:var(--d-line);padding:1px;min-width:0;min-height:0}
+  .dsplit{display:flex;flex:1;gap:1px;min-width:0;min-height:0}
+  .dsplit.row{flex-direction:row}.dsplit.col{flex-direction:column}
+  .dpane{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;
+         background:var(--d-bg);overflow:hidden}
+  .dpane.focus{box-shadow:inset 2px 0 0 var(--d-acc)}
+  .dph{display:flex;align-items:center;gap:.4rem;padding:.2rem .5rem;font-size:.64rem;
+       color:var(--d-dim);border-bottom:1px solid var(--d-line)}
+  .dpb{flex:1;overflow:auto;padding:.4rem .55rem;white-space:pre;font-size:.72rem}
+  .dclose{margin-left:auto;background:none;border:0;color:var(--d-dim);cursor:pointer;
+          font:inherit;font-size:.8rem;line-height:1;padding:0 .2rem}
+  .dclose:hover{color:var(--d-red)}
+  .dbadge{font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;padding:.02rem .28rem;
+          border:1px solid currentColor;border-radius:3px;color:var(--d-cyn)}
+  .dg{color:var(--d-grn)}.dy{color:var(--d-yel)}.dr{color:var(--d-red)}
+  .dc{color:var(--d-cyn)}.da{color:var(--d-acc)}.dd{color:var(--d-dim)}.dv{color:var(--d-vio)}
+  .dcur{display:inline-block;width:.55em;height:1.05em;background:var(--d-acc);vertical-align:-.18em}
+  .dadd{display:block;color:var(--d-grn);background:rgba(111,224,175,.09)}
+  .ddel{display:block;color:var(--d-red);background:rgba(255,140,140,.09)}
+  .dhun{display:block;color:var(--d-acc);opacity:.75}
+
+  .dstatus{display:flex;gap:1rem;flex-wrap:wrap;padding:.35rem .7rem;background:var(--d-chrome);
+           border-top:1px solid var(--d-line);font-size:.64rem;color:var(--d-dim)}
+  .dstatus b{color:var(--d-fg);font-weight:600}
+  .dstatus .dhint{margin-left:auto;opacity:.7;font-style:italic}
+
+  .dwin{position:relative}
+  .dmenu{position:absolute;z-index:12;min-width:190px;background:var(--d-chrome);
+         border:1px solid var(--d-line);border-radius:7px;padding:4px;display:none;
+         box-shadow:0 14px 34px -14px rgba(0,0,0,.85)}
+  .dmenu.on{display:block}
+  .dmenu button{display:flex;width:100%;align-items:center;gap:.7rem;background:none;border:0;
+                color:var(--d-fg);font:inherit;font-size:.7rem;text-align:left;
+                padding:.28rem .5rem;border-radius:4px;cursor:pointer}
+  .dmenu button:hover{background:var(--d-acc);color:#06101F}
+  .dmenu .sc{margin-left:auto;color:var(--d-dim);font-size:.64rem}
+  .dmenu button:hover .sc{color:rgba(6,16,31,.72)}
+  .dmenu hr{border:0;border-top:1px solid var(--d-line);margin:4px 2px}
+
+  .dpal{position:absolute;inset:0;background:rgba(6,10,15,.5);display:none;
+        justify-content:center;align-items:flex-start;padding-top:46px;z-index:14}
+  .dpal.on{display:flex}
+  .dpalbox{width:min(420px,88%);background:var(--d-chrome);border:1px solid var(--d-line);
+           border-radius:8px;overflow:hidden}
+  .dpalin{display:flex;gap:.5rem;align-items:center;padding:.45rem .6rem;
+          border-bottom:1px solid var(--d-line);color:var(--d-acc);font-size:.7rem}
+  .dpalin input{flex:1;background:none;border:0;outline:none;color:var(--d-fg);
+                font:inherit;font-size:.75rem}
+  .dpalres{max-height:190px;overflow:auto;padding:4px}
+  .dpres{display:flex;gap:.6rem;padding:.25rem .5rem;border-radius:4px;font-size:.7rem;
+         color:var(--d-fg);cursor:pointer;align-items:baseline}
+  .dpres:hover,.dpres.on{background:var(--d-acc);color:#06101F}
+  .dpres .sc{margin-left:auto;color:var(--d-dim);font-size:.64rem}
+  .dpres:hover .sc,.dpres.on .sc{color:rgba(6,16,31,.72)}
+
+  .dtoast{position:absolute;top:44px;right:12px;width:230px;background:var(--d-chrome);
+          border:1px solid var(--d-line);border-radius:8px;padding:.5rem .6rem;
+          font-size:.68rem;opacity:0;transform:translateX(260px);pointer-events:none;
+          transition:transform .25s ease,opacity .25s ease;z-index:13}
+  .dtoast.on{opacity:1;transform:none}
+  .dtoast b{display:block;color:var(--d-fg);font-size:.7rem}
+  .dtoast span{color:var(--d-dim)}
+
+  .dctl{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.9rem}
+  .demonote{font-family:var(--mono);font-size:.74rem;color:var(--dim);margin-top:.9rem;max-width:74ch}
+  .dctl button{font-family:var(--mono);font-size:.74rem;padding:.4rem .75rem;border-radius:6px;
+               background:var(--chrome);color:var(--fg);border:1px solid var(--line);cursor:pointer}
+  .dctl button:hover{border-color:var(--acc);color:var(--acc)}
+
   @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
@@ -101,6 +268,7 @@
   <span class="mark">Marlin</span>
   <nav>
     <a href="#what">What it does</a>
+    <a href="#proof">Screenshot</a>
     <a href="#security">Security</a>
     <a href="#install">Install</a>
     <a href="#gaps">Not done yet</a>
@@ -112,20 +280,64 @@
   <div class="eyebrow">Open source terminal · MIT</div>
   <h1>A terminal built for<br>running coding agents.</h1>
   <p class="lede">You do not run one command and watch it any more. You run four agents in four
-  panes and none of them finishes while you are looking. <strong>Marlin is built for that.</strong></p>
+  panes, and none of them finishes while you are looking. <strong>Marlin is built for that.</strong></p>
 
-  <div class="status">
-    <b>Status: v0.1</b> — first working version, built 15–16 August 2026. It is used daily by its
-    author and it is early. <strong>No performance number has been measured yet</strong>, so this
-    page makes no speed claims. When there are numbers they will appear here with the method beside
-    them.
-  </div>
+  <ul class="facts">
+    <li>Splits that nest</li>
+    <li>Vertical tabs</li>
+    <li>Git staging in the sidebar</li>
+    <li>No cloud, no account, no telemetry</li>
+    <li>MIT</li>
+  </ul>
+
 
   <div class="cta">
     <a class="btn primary" href="#install">Install</a>
-    <a class="btn" href="https://github.com/ehsangazar/marlin">Source</a>
+        <a class="btn" href="https://github.com/ehsangazar/marlin">Source</a>
     <a class="btn" href="https://github.com/sponsors/ehsangazar">Sponsor</a>
   </div>
+
+  <div class="dwin" id="dwin">
+    <div class="dtitle">
+      <span class="ddot r"></span><span class="ddot y"></span><span class="ddot g"></span>
+      <span class="dbrand">Marlin</span><span class="dname" id="d-name"></span>
+    </div>
+    <div class="dbody h" id="d-body">
+      <div class="dtabs" id="d-tabs"></div>
+      <div class="dmain">
+        <aside class="dtree" id="d-tree"></aside>
+        <div class="dpanes" id="d-panes"></div>
+      </div>
+    </div>
+    <div class="dmenu" id="d-menu"></div>
+    <div class="dtoast" id="d-toast"><b>Marlin</b><span id="d-toast-b"></span></div>
+    <div class="dpal" id="d-pal">
+      <div class="dpalbox">
+        <div class="dpalin"><span>&gt;</span><input id="d-palq" placeholder="Run a command…" spellcheck="false"></div>
+        <div class="dpalres" id="d-palres"></div>
+      </div>
+    </div>
+    <div class="dstatus">
+      <span>bar <b id="d-bar">top</b></span>
+      <span>panes <b id="d-count">1</b></span>
+      <span>theme <b id="d-theme">Marlin Dark</b></span>
+      <span class="dhint">a mock, not the app</span>
+    </div>
+  </div>
+
+  <div class="dctl">
+    <button data-a="svert">Split vertically</button>
+    <button data-a="shorz">Split horizontally</button>
+    <button data-a="bar">Cycle tab bar</button>
+    <button data-a="tab">New tab</button>
+    <button data-a="theme">Next theme</button>
+    <button data-a="palette">Command palette</button>
+    <button data-a="reset">Reset</button>
+  </div>
+
+  <p class="demonote">A working mock, running in this page. Nest a couple of splits, rotate the tab
+  bar, click a file to watch it take over the tab, right-click a pane, double-click a tab to rename
+  it. It behaves the way the real app behaves.</p>
 </header>
 
 <section id="what" class="wrap">
@@ -152,41 +364,40 @@
   </div>
 </section>
 
+<section id="proof" class="wrap">
+  <div class="head"><h2>And here it is actually running</h2><span class="note">Not a render</span></div>
+  <p>Marlin running Claude Code in a real repository with nine repos in the sidebar, which is what it
+  was built for. Every competitor's hero is a mockup; this one is a screenshot.</p>
+  <figure class="shot" style="margin-bottom:0">
+    <img src="/marlin.png" width="1800" height="1211" alt="Marlin running Claude Code, with the repository sidebar showing nine repositories and the explorer beneath it">
+  </figure>
+  <div class="shotcap">
+    <b>Not a mockup.</b>
+    <span>Marlin running Claude Code in a real repository, which is what it was built for.</span>
+  </div>
+</section>
+
 <section id="security" class="wrap">
   <div class="head"><h2>Security, and what leaves your machine</h2><span class="note">Nothing does</span></div>
   <p>A terminal sees everything: your keys, your tokens, your employer's source. That makes the
   interesting question not what a terminal can do, but what it refuses to do. Marlin's answers are
   deliberate, and they are checkable, because the source is right there.</p>
 
-  <div class="sec">
-    <ul>
-      <li><b>No cloud, no account, no sign-in.</b> Marlin has no backend. There is nothing to log
-        into, and no service that could be down or shut off.</li>
-      <li><b>No telemetry, of any kind.</b> Not opt-out, not anonymised, not "just crash counts".
-        There is no analytics code in the app.</li>
-      <li><b>Your terminal output is never stored or sent.</b> Scrollback lives in memory in your
-        session, and the diagnostics log deliberately contains none of it, because scrollback holds
-        passwords and private source.</li>
-      <li><b>Error reports are a button, not a background job.</b> Problems are written to a local
-        file. Reporting opens a GitHub issue <em>pre-filled and editable</em>, so you read exactly
-        what you are sending before you send it.</li>
-      <li><b>No AI in the loop.</b> Marlin does not read your commands, does not send them anywhere,
-        and has no model in it. It runs agents; it is not one.</li>
-      <li><b>Your shell stays your shell.</b> Marlin never parses your command line. Completion,
-        history and autosuggestions remain fish's and zsh's job, which means your history file is
-        never duplicated somewhere new.</li>
-      <li><b>Your git is your git.</b> The sidebar shells out to the <code>git</code> binary you
-        already have, with your config, your credentials and your hooks. No second implementation
-        with its own idea of what your repository contains.</li>
-      <li><b>The webview is locked down.</b> It can receive terminal output and move its own window.
-        It has no filesystem, shell or network permission, and its content security policy blocks
-        outbound requests, so nothing the terminal prints can call home.</li>
-      <li><b>Links open in your browser, and only http and https.</b> A UI that can be navigated by
-        something the terminal <em>printed</em> is a class of problem worth closing before it exists.</li>
-      <li><b>Settings are a file you own.</b> <code>~/.config/marlin/marlin.toml</code>, plain text,
-        editable by hand, safe to keep in a dotfiles repo.</li>
-    </ul>
-  </div>
+  <div class="tblwrap"><table class="sectbl">
+    <thead><tr><th scope="col">Promise</th><th scope="col">What that actually means</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">No cloud, no account, no sign-in</th><td>Marlin has no backend. There is nothing to log into, and no service that could be down or shut off.</td></tr>
+      <tr><th scope="row">No telemetry, of any kind</th><td>Not opt-out, not anonymised, not &ldquo;just crash counts&rdquo;. There is no analytics code in the app.</td></tr>
+      <tr><th scope="row">Your terminal output is never stored or sent</th><td>Scrollback lives in memory in your session, and the diagnostics log deliberately contains none of it, because scrollback holds passwords and private source.</td></tr>
+      <tr><th scope="row">Error reports are a button, not a background job</th><td>Problems are written to a local file. Reporting opens a GitHub issue <em>pre-filled and editable</em>, so you read exactly what you are sending before you send it.</td></tr>
+      <tr><th scope="row">No AI in the loop</th><td>Marlin does not read your commands, does not send them anywhere, and has no model in it. It runs agents; it is not one.</td></tr>
+      <tr><th scope="row">Your shell stays your shell</th><td>Marlin never parses your command line. Completion, history and autosuggestions remain fish&rsquo;s and zsh&rsquo;s job, so your history file is never duplicated somewhere new.</td></tr>
+      <tr><th scope="row">Your git is your git</th><td>The sidebar shells out to the <code>git</code> binary you already have, with your config, your credentials and your hooks. No second implementation with its own idea of what your repository contains.</td></tr>
+      <tr><th scope="row">The webview is locked down</th><td>It can receive terminal output and move its own window. No filesystem, shell or network permission, and a content security policy that blocks outbound requests, so nothing the terminal prints can call home.</td></tr>
+      <tr><th scope="row">Links open in your browser, and only http and https</th><td>A UI that can be navigated by something the terminal <em>printed</em> is a class of problem worth closing before it exists.</td></tr>
+      <tr><th scope="row">Settings are a file you own</th><td><code>~/.config/marlin/marlin.toml</code>, plain text, editable by hand, safe to keep in a dotfiles repo.</td></tr>
+    </tbody>
+  </table></div>
 
   <p style="margin-top:1.3rem"><strong>One honest caveat.</strong> Builds are not yet signed with an
   Apple Developer ID, so macOS will warn you about an unidentified developer. The instructions below
@@ -253,6 +464,323 @@
   <span>marlin.gazar.dev · built in the open since 15 Aug 2026</span>
   <span><a href="https://github.com/ehsangazar/marlin">github.com/ehsangazar/marlin</a> · MIT</span>
 </div></footer>
+
+<script>
+(function () {
+  "use strict";
+  // A working mock of the interface. Same shapes as the real app: a tab holds a
+  // tree of panes, splits nest, and opening a file takes the tab over with the
+  // terminal kept on the right.
+  var THEMES = [
+    ["Marlin Dark",{bg:"#0A0F16",bar:"#0C121B",chrome:"#111A26",line:"#26333F",fg:"#E4ECF5",dim:"#8497AB",acc:"#5C9CFF",vio:"#9E90FF",grn:"#6FE0AF",yel:"#F0C25F",red:"#FF8C8C",cyn:"#5FDCEC"}],
+    ["Dracula",{bg:"#282A36",bar:"#21222C",chrome:"#1E1F29",line:"#565A72",fg:"#F8F8F2",dim:"#8B9BD4",acc:"#C9A5FA",vio:"#FF8FD0",grn:"#5DFB87",yel:"#F4FC9B",red:"#FF6B6B",cyn:"#9BEDFD"}],
+    ["Tokyo Night",{bg:"#161721",bar:"#12131B",chrome:"#0F1017",line:"#3B4261",fg:"#D5DCF7",dim:"#7E88B8",acc:"#8DB0F9",vio:"#C7AAF9",grn:"#AEDA7C",yel:"#EBBC7A",red:"#FF8A9F",cyn:"#93D9FF"}],
+    ["Catppuccin Latte",{bg:"#FFFFFF",bar:"#E9ECF2",chrome:"#DEE2EA",line:"#BCC0CC",fg:"#363950",dim:"#6B6E82",acc:"#0F52E0",vio:"#7526E0",grn:"#2F8A1F",yel:"#B0700F",red:"#C00A2F",cyn:"#0E7C74"}]
+  ];
+  var REPOS = ["clubcp","gazar","hub","marlin","notes","parenting"];
+  var FILES = [
+    ["Cargo.toml","toml","<span class='da'>[dependencies]</span>\ntauri = <span class='dg'>\"2\"</span>\nportable-pty = <span class='dg'>\"0.9\"</span>\nignore = <span class='dg'>\"0.4\"</span>"],
+    ["main.rs","rs","<span class='dv'>fn</span> <span class='da'>main</span>() {\n    marlin_lib::<span class='da'>run</span>()\n}"],
+    ["marlin.toml","toml","<span class='da'>[appearance]</span>\ntheme = <span class='dg'>\"Marlin Dark\"</span>\ncursor_blink = <span class='dy'>false</span>\n\n<span class='da'>[layout]</span>\ntab_bar = <span class='dg'>\"top\"</span>"],
+    ["README.md","md","<span class='da'># marlin</span>\n\nA terminal built for running\ncoding agents.\n\n<span class='dd'>No cloud. No telemetry.</span>"]
+  ];
+  var DIFF = "<span class='dhun'>@@ -18,7 +18,9 @@</span>\n <span class='dd'>pub fn new(device: &Device) -> Self {</span>\n<span class='ddel'>-    // one atlas per pane</span>\n<span class='dadd'>+    // one atlas per WINDOW: panes share glyphs,</span>\n<span class='dadd'>+    // which is most of the per-pane memory</span>\n <span class='dd'>}</span>";
+  var SHELL = "<span class='dg'>~/marlin</span> <span class='da'>❯</span> ";
+  var BODIES = {
+    claude: "<span class='dv'>✻</span> <span class='dd'>Read</span> src/render/atlas.rs\n<span class='dv'>✻</span> <span class='dd'>Editing</span> 3 files\n\n<span class='dy'>▶ Waiting for your approval</span>\n  <span class='dd'>[y] approve   [n] reject</span>",
+    build: SHELL + "cargo build --release\n<span class='dd'>   Compiling</span> marlin v0.1.0\n<span class='dg'>    Finished</span> in 41.2s\n\n" + SHELL + "<span class='dcur'></span>",
+    test:  SHELL + "cargo test\n<span class='dr'>error</span>: names must survive OSC 2\n<span class='dd'>1 failed; 41 passed</span>\n\n" + SHELL + "<span class='dcur'></span>",
+    log:   SHELL + "tail -f render.log\n<span class='dd'>frame</span> 0.41ms <span class='dd'>damage 2 cells</span>\n<span class='dd'>frame skipped, no damage</span>",
+    shell: SHELL + "<span class='dcur'></span>"
+  };
+
+  var uid = 0;
+  function pane(name, body, status) { return { id: ++uid, name: name, body: body, status: status || null }; }
+  function leaf(p) { return { pane: p }; }
+  function split(dir, a, b) { return { dir: dir, a: a, b: b }; }
+  function leaves(n, out) { out = out || []; if (n.pane) { out.push(n); return out; } leaves(n.a, out); leaves(n.b, out); return out; }
+  function replaceNode(root, t, r) { if (root === t) return r; if (root.pane) return root; root.a = replaceNode(root.a, t, r); root.b = replaceNode(root.b, t, r); return root; }
+  function removeNode(root, t) { if (root === t) return null; if (root.pane) return root; var a = removeNode(root.a, t), b = removeNode(root.b, t); if (!a) return b; if (!b) return a; root.a = a; root.b = b; return root; }
+
+  function freshTabs() {
+    return [
+      { name: "", root: split("row", leaf(pane("cargo build", BODIES.build, "ok")),
+                              split("col", leaf(pane("cargo test", BODIES.test, "err")),
+                                           leaf(pane("render.log", BODIES.log, "run")))) },
+      { name: "", root: leaf(pane("claude", BODIES.claude, "run")) }
+    ];
+  }
+
+  var st = { tabs: freshTabs(), active: 0, focus: null, bar: "h", theme: 0, sel: "", stash: null };
+  st.focus = leaves(st.tabs[0].root)[0].pane.id;
+
+  var el = {};
+  ["dwin","d-body","d-tabs","d-tree","d-panes","d-name","d-bar","d-count","d-theme"].forEach(function (id) {
+    el[id] = document.getElementById(id);
+  });
+  if (!el.dwin) return;
+
+  function tab() { return st.tabs[st.active]; }
+  function focused() {
+    var ls = leaves(tab().root);
+    for (var i = 0; i < ls.length; i++) if (ls[i].pane.id === st.focus) return ls[i];
+    return ls[0];
+  }
+  function label(t) {
+    if (t.pinned && t.name) return t.name;
+    var ls = leaves(t.root);
+    for (var i = 0; i < ls.length; i++) if (ls[i].pane.id === st.focus) return ls[i].pane.name;
+    return ls[0].pane.name;
+  }
+
+  function applyTheme() {
+    var t = THEMES[st.theme][1];
+    for (var k in t) el.dwin.style.setProperty("--d-" + k, t[k]);
+    el["d-theme"].textContent = THEMES[st.theme][0];
+  }
+
+  function drawTabs() {
+    el["d-tabs"].innerHTML = "";
+    st.tabs.forEach(function (t, i) {
+      var b = document.createElement("button");
+      b.className = "dtab";
+      b.setAttribute("aria-selected", i === st.active ? "true" : "false");
+      var worst = null, rank = { err: 3, run: 1, ok: 0 };
+      leaves(t.root).forEach(function (l) {
+        var s = l.pane.status;
+        if (s && (!worst || rank[s] > rank[worst])) worst = s;
+      });
+      b.innerHTML = '<span class="dsdot' + (worst ? " " + worst : "") + '"></span>' +
+                    '<span>' + (i + 1) + '</span><span>' + label(t) + '</span>';
+      b.onclick = function () { st.active = i; st.focus = leaves(tab().root)[0].pane.id; draw(); };
+      b.ondblclick = function (e) { e.preventDefault(); st.active = i; draw(); renameTab(); };
+      b.oncontextmenu = function (e) {
+        e.preventDefault(); e.stopPropagation(); st.active = i; draw();
+        showMenu(e.clientX, e.clientY, [
+          ["New Tab", "\u2318T", function () { st.tabs.push({ name: "", root: leaf(pane("zsh", BODIES.shell, null)) }); st.active = st.tabs.length - 1; st.focus = leaves(tab().root)[0].pane.id; draw(); }],
+          ["Rename Tab\u2026", "\u21e7F2", renameTab],
+          "-",
+          ["Top", "", function () { st.bar = "h"; draw(); }],
+          ["Side", "", function () { st.bar = "v"; draw(); }],
+          ["Hidden", "", function () { st.bar = "hidden"; draw(); }]
+        ]);
+      };
+      el["d-tabs"].appendChild(b);
+    });
+  }
+
+  function row(cls, icon, text, onclick, sel) {
+    var b = document.createElement("button");
+    b.className = "drow " + cls + (sel ? " sel" : "");
+    b.innerHTML = '<span class="di">' + icon + '</span><span>' + text + '</span>';
+    if (onclick) b.onclick = onclick;
+    return b;
+  }
+
+  function drawTree() {
+    var t = el["d-tree"];
+    t.innerHTML = "";
+    var h = document.createElement("div");
+    h.className = "dhead";
+    h.innerHTML = '<span>~/Projects/merge</span><span class="ok2">.claude ✓</span>';
+    t.appendChild(h);
+
+    var s1 = document.createElement("div"); s1.className = "dsec"; s1.textContent = "Repositories";
+    t.appendChild(s1);
+    REPOS.forEach(function (r) { t.appendChild(row("repo", "⑂", r)); });
+
+    var s2 = document.createElement("div"); s2.className = "dsec"; s2.textContent = "Explorer";
+    t.appendChild(s2);
+    t.appendChild(row("dir", "▪", "src"));
+    FILES.forEach(function (f) {
+      t.appendChild(row("", "•", f[0], function () { openFile(f); }, st.sel === f[0]));
+    });
+
+    var s3 = document.createElement("div"); s3.className = "dsec"; s3.textContent = "Source control · 1";
+    t.appendChild(s3);
+    t.appendChild(row("", "•", "atlas.rs", function () { openDiff(); }, st.sel === "atlas.rs"));
+  }
+
+  function nodeEl(n) {
+    if (n.pane) {
+      var d = document.createElement("div");
+      d.className = "dpane" + (n.pane.id === st.focus ? " focus" : "");
+      var badge = n.pane.view ? '<span class="dbadge">' + n.pane.view + "</span>" : "";
+      var close = n.pane.view ? '<button class="dclose" title="Close">×</button>' : "";
+      d.innerHTML = '<div class="dph"><span>' + n.pane.name + "</span>" + badge + close +
+                    '</div><div class="dpb">' + n.pane.body + "</div>";
+      d.onmousedown = function () { st.focus = n.pane.id; draw(); };
+      d.oncontextmenu = function (e) {
+        e.preventDefault(); e.stopPropagation(); st.focus = n.pane.id; draw();
+        showMenu(e.clientX, e.clientY, [
+          ["Split Vertically", "\u2318D", function () { doSplit("row"); }],
+          ["Split Horizontally", "\u2318\u21e7D", function () { doSplit("col"); }],
+          "-",
+          ["Open a Diff", "", openDiff],
+          ["Close Pane", "\u2318W", function () {
+            var t = tab();
+            if (leaves(t.root).length < 2) { toast("The last pane stays."); return; }
+            t.root = removeNode(t.root, n);
+            st.focus = leaves(t.root)[0].pane.id; draw();
+          }]
+        ]);
+      };
+      if (n.pane.view) d.querySelector(".dclose").onclick = function (e) { e.stopPropagation(); restore(); };
+      return d;
+    }
+    var w = document.createElement("div");
+    w.className = "dsplit " + n.dir;
+    var a = nodeEl(n.a), b = nodeEl(n.b);
+    if (n.ratio) { a.style.flex = n.ratio[0]; b.style.flex = n.ratio[1]; }
+    w.appendChild(a); w.appendChild(b);
+    return w;
+  }
+
+  function draw() {
+    el["d-body"].className = "dbody " + (st.bar === "hidden" ? "h hidden" : st.bar);
+    drawTabs();
+    drawTree();
+    el["d-panes"].innerHTML = "";
+    el["d-panes"].appendChild(nodeEl(tab().root));
+    el["d-name"].textContent = label(tab());
+    el["d-bar"].textContent = st.bar === "h" ? "top" : st.bar === "v" ? "side" : "hidden";
+    el["d-count"].textContent = leaves(tab().root).length;
+  }
+
+  function doSplit(dir) {
+    var t = tab();
+    if (leaves(t.root).length >= 4) return;
+    var src = [["htop", BODIES.log, "run"], ["notes.md", BODIES.shell, null], ["claude", BODIES.claude, "run"]];
+    var pick = src[(leaves(t.root).length - 1) % src.length];
+    var np = pane(pick[0], pick[1], pick[2]);
+    t.root = replaceNode(t.root, focused(), split(dir, leaf(focused().pane), leaf(np)));
+    st.focus = np.id;
+    draw();
+  }
+
+  // Opening a file rearranges the tab rather than adding to it: the terminal
+  // moves right, everything else is stashed, and closing restores it exactly.
+  function takeover(name, body, kind) {
+    var t = tab();
+    if (!st.stash) st.stash = t.root;
+    var term = leaves(t.root).map(function (l) { return l.pane; }).filter(function (p) { return !p.view; })[0]
+               || pane("zsh", BODIES.shell, null);
+    var v = pane(name, body, null); v.view = kind;
+    var root = split("row", leaf(v), leaf(term));
+    root.ratio = [1.7, 1];
+    t.root = root;
+    st.focus = v.id;
+    st.sel = name;
+    draw();
+  }
+  function openFile(f) { takeover(f[0], f[2], "read-only"); }
+  function openDiff() { takeover("atlas.rs", DIFF, "diff"); }
+  function restore() {
+    if (!st.stash) return;
+    tab().root = st.stash; st.stash = null; st.sel = "";
+    st.focus = leaves(tab().root)[0].pane.id;
+    draw();
+  }
+
+
+  // ---- borrowed from the design prototype: menu, palette, rename ----
+  var menuEl = document.getElementById("d-menu");
+  var palEl = document.getElementById("d-pal");
+  var palQ = document.getElementById("d-palq");
+  var palRes = document.getElementById("d-palres");
+  var toastEl = document.getElementById("d-toast");
+  var toastB = document.getElementById("d-toast-b");
+  var toastT = 0;
+
+  function toast(msg) {
+    toastB.textContent = msg;
+    toastEl.classList.add("on");
+    clearTimeout(toastT);
+    toastT = setTimeout(function () { toastEl.classList.remove("on"); }, 2600);
+  }
+
+  function hideMenu() { menuEl.classList.remove("on"); }
+  function showMenu(x, y, items) {
+    menuEl.innerHTML = "";
+    items.forEach(function (it) {
+      if (it === "-") { menuEl.appendChild(document.createElement("hr")); return; }
+      var b = document.createElement("button");
+      b.innerHTML = "<span>" + it[0] + "</span><span class='sc'>" + (it[1] || "") + "</span>";
+      b.onclick = function (e) { e.stopPropagation(); hideMenu(); if (it[2]) it[2](); };
+      menuEl.appendChild(b);
+    });
+    menuEl.classList.add("on");
+    var r = el.dwin.getBoundingClientRect();
+    menuEl.style.left = Math.max(4, Math.min(x - r.left, r.width - menuEl.offsetWidth - 8)) + "px";
+    menuEl.style.top = Math.max(4, Math.min(y - r.top, r.height - menuEl.offsetHeight - 8)) + "px";
+  }
+  document.addEventListener("click", hideMenu);
+
+  var CMDS = [
+    ["Split Vertically", "\u2318D", function () { doSplit("row"); }],
+    ["Split Horizontally", "\u2318\u21e7D", function () { doSplit("col"); }],
+    ["Cycle Tab Bar", "\u2318\u21e7B", function () { st.bar = st.bar === "h" ? "v" : st.bar === "v" ? "hidden" : "h"; draw(); }],
+    ["Rename Tab", "\u21e7F2", function () { renameTab(); }],
+    ["Next Theme", "", function () { st.theme = (st.theme + 1) % THEMES.length; applyTheme(); }],
+    ["Open Diff", "", function () { openDiff(); }],
+    ["Restore Layout", "Esc", function () { restore(); }]
+  ];
+  var palSel = 0;
+  function paintPal() {
+    var q = palQ.value.toLowerCase();
+    var hits = CMDS.filter(function (c) { return !q || c[0].toLowerCase().indexOf(q) >= 0; });
+    palRes.innerHTML = "";
+    hits.forEach(function (c, i) {
+      var d = document.createElement("div");
+      d.className = "dpres" + (i === palSel ? " on" : "");
+      d.innerHTML = "<span>" + c[0] + "</span><span class='sc'>" + (c[1] || "palette only") + "</span>";
+      d.onmousedown = function (e) { e.preventDefault(); closePal(); c[2](); };
+      palRes.appendChild(d);
+    });
+    palRes._hits = hits;
+  }
+  function openPal() { palSel = 0; palQ.value = ""; palEl.classList.add("on"); paintPal(); palQ.focus(); }
+  function closePal() { palEl.classList.remove("on"); }
+  palQ.oninput = function () { palSel = 0; paintPal(); };
+  palQ.onkeydown = function (e) {
+    var hits = palRes._hits || [];
+    if (e.key === "Escape") closePal();
+    else if (e.key === "ArrowDown") { palSel = Math.min(palSel + 1, hits.length - 1); paintPal(); }
+    else if (e.key === "ArrowUp") { palSel = Math.max(palSel - 1, 0); paintPal(); }
+    else if (e.key === "Enter" && hits[palSel]) { closePal(); hits[palSel][2](); }
+    e.stopPropagation();
+  };
+  palEl.onmousedown = function (e) { if (e.target === palEl) closePal(); };
+
+  // Renaming, with the rule that makes it worth having: a manual name is pinned
+  // and the shell stops overwriting it.
+  function renameTab() {
+    var t = tab();
+    var next = window.prompt("Rename tab", t.name || label(t));
+    if (next === null) return;
+    t.name = next.trim();
+    t.pinned = !!t.name;
+    draw();
+    toast(t.pinned ? "Pinned. The shell will not overwrite it." : "Unpinned, back to the shell's name.");
+  }
+
+  document.querySelectorAll(".dctl button").forEach(function (b) {
+    b.onclick = function () {
+      var a = b.dataset.a;
+      if (a === "svert") doSplit("row");
+      else if (a === "shorz") doSplit("col");
+      else if (a === "bar") { st.bar = st.bar === "h" ? "v" : st.bar === "v" ? "hidden" : "h"; draw(); }
+      else if (a === "tab") { st.tabs.push({ name: "", root: leaf(pane("zsh", BODIES.shell, null)) }); st.active = st.tabs.length - 1; st.focus = leaves(tab().root)[0].pane.id; draw(); }
+      else if (a === "theme") { st.theme = (st.theme + 1) % THEMES.length; applyTheme(); }
+      else if (a === "palette") openPal();
+      else if (a === "reset") { st.tabs = freshTabs(); st.active = 0; st.stash = null; st.sel = ""; st.focus = leaves(st.tabs[0].root)[0].pane.id; st.bar = "h"; st.theme = 0; applyTheme(); draw(); }
+    };
+  });
+
+  applyTheme();
+  draw();
+})();
+</script>
 
 </body>
 </html>

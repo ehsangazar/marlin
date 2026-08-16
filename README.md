@@ -70,12 +70,26 @@ because a stale gap list flatters you just as much as no gap list at all.
 - **Linux and Windows are untested.** The stack is cross-platform; the testing is not.
 - **The settings panel does not expose everything** the config file can hold.
 
+## Installing
+
+Download the DMG from [Releases](https://github.com/ehsangazar/marlin/releases), or build it
+yourself. The build is a **universal binary**, so it runs on Apple silicon and Intel.
+
+**Builds are not signed with an Apple Developer ID**, so macOS will refuse to open a downloaded
+copy. Either right-click the app and choose Open, or:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Marlin.app
+```
+
+Building from source avoids the question entirely, and is what we would do in your position.
+
 ## Building
 
 ```sh
 pnpm install
-pnpm tauri dev      # run it
-pnpm tauri build    # bundle it
+pnpm tauri dev                              # run it
+pnpm tauri build --target universal-apple-darwin   # bundle it
 ```
 
 Needs Node, pnpm and a stable Rust toolchain. macOS first; Linux untested.
