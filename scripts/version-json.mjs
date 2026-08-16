@@ -6,11 +6,20 @@ const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const log = readFileSync("CHANGELOG.md", "utf8");
 
 const m = new RegExp(`## \\[${pkg.version.replace(/\\./g, "\\\\.")}\\][^\\n]*\\n([\\s\\S]*?)(?=\\n## |$)`).exec(log);
-const notes = (m?.[1] ?? "")
-  .split("\n")
-  .filter((l) => l.trim().startsWith("- "))
+// Rejoin wrapped bullets before taking them. Keeping only the first physical
+// line of each cut every entry off mid-sentence, and the settings panel now
+// shows the first note to your face.
+const bullets = [];
+for (const raw of (m?.[1] ?? "").split("\n")) {
+  const line = raw.trim();
+  if (line.startsWith("- ")) bullets.push(line.slice(2));
+  else if (line && bullets.length && !line.startsWith("#")) {
+    bullets[bullets.length - 1] += ` ${line}`;
+  }
+}
+const notes = bullets
   .slice(0, 6)
-  .map((l) => l.trim().replace(/^- /, "").replace(/\*\*/g, ""))
+  .map((b) => b.replace(/\*\*/g, ""))
   .join("\n");
 
 writeFileSync(

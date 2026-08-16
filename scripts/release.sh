@@ -30,4 +30,4 @@ node scripts/version-json.mjs
 git add -A
 git commit -q -m "Release v$V"
 git tag -a "v$V" -m "Marlin v$V"
-echo "tagged v$V — push with: git push && git push --tags"
+echo "tagged v$V. Ship it with: scripts/publish.sh"
