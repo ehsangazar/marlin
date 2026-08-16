@@ -25,6 +25,14 @@
 - **Renaming that sticks.** `F2` pane, `⇧F2` tab. A manual rename pins the name so the shell
   stops touching it; without that, your first `cd` overwrites what you typed.
 - **Status dots** from real shell marks, not guesswork. See below.
+- **Syntax highlighting** across 30 languages, themed through the active palette.
+- **Editing**, with a write refused if the file changed on disk since you opened it.
+- **Find in scrollback**, zoom pane, directional pane focus, drag to reorder tabs and drag
+  to swap panes, and right-click menus everywhere including the tree.
+- **Desktop notifications**, only when the window is not focused and only for commands that
+  ran long enough that you went and did something else.
+- **Settings in `~/.config/marlin/marlin.toml`**, editable by hand and safe in dotfiles.
+- **Local-only diagnostics** with crash detection and one-click issue reporting. No telemetry.
 - **Six themes**, three dark and three light, with values taken from each upstream project.
 
 ## Shell integration
@@ -50,14 +58,17 @@ Without the hook you get a working terminal with no dots, which is degraded rath
 
 ## Not done yet
 
-Listed because a README that only lists wins is a sales page.
+Listed because a README that only lists wins is a sales page. **Kept honest in both
+directions**: five items that used to be on this list have been built and were removed,
+because a stale gap list flatters you just as much as no gap list at all.
 
-- **No syntax highlighting** in the file viewer, only line numbers.
-- **Config lives in `localStorage`**, not in a hand-editable `~/.config/marlin/marlin.toml`.
-- **No notifications, no updater, no drag and drop, no right-click menus, no zoom pane, no
-  scrollback search, no pane focus by direction.**
-- **No signed build**, so a downloaded binary would be blocked by Gatekeeper. Build it yourself.
-- **Nothing is measured.** No latency, throughput or memory figures exist.
+- **Nothing is measured.** No latency, throughput or memory figures exist. This is the one
+  that matters, because the whole positioning rests on it.
+- **No updater.** New versions are a manual rebuild.
+- **Builds are unsigned**, so macOS warns about an unidentified developer. Building from
+  source avoids the question.
+- **Linux and Windows are untested.** The stack is cross-platform; the testing is not.
+- **The settings panel does not expose everything** the config file can hold.
 
 ## Building
 

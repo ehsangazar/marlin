@@ -345,3 +345,13 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 
 .sheetcard h4 .sver { font-size:.6rem; font-weight:500; color:var(--m-dim);
                       margin-left:.5rem; letter-spacing:.04em; }
+
+/* Pane drag grip: small, top-right, visible on hover. The terminal body stays
+   selectable, because selecting text is what a terminal is for. */
+.pgrip { position:absolute; top:2px; right:6px; width:22px; height:12px; z-index:3;
+         cursor:grab; opacity:0; border-radius:3px; background:
+         repeating-linear-gradient(90deg,var(--m-line) 0 2px,transparent 2px 4px); }
+.pane-term:hover .pgrip { opacity:.8; }
+.pgrip:hover { opacity:1 !important; }
+.pane-term.drag { opacity:.4; }
+.pane-term.dragover { outline:2px dashed var(--m-vio); outline-offset:-3px; }

@@ -15,6 +15,7 @@ export interface Config {
   scrollback: number;
   copyOnSelect: boolean;
   rightClickPaste: boolean;
+  notifications: boolean;
 }
 
 export const DEFAULTS: Config = {
@@ -34,6 +35,7 @@ export const DEFAULTS: Config = {
   scrollback: 2000,
   copyOnSelect: false,
   rightClickPaste: false,
+  notifications: true,
 };
 
 /**
@@ -50,6 +52,7 @@ const SECTIONS: Record<string, (keyof Config)[]> = {
   appearance: ["theme", "fontFamily", "fontSize", "cursorStyle", "cursorBlink"],
   layout: ["tabBar", "fileTree", "diffView"],
   terminal: ["shell", "scrollback", "copyOnSelect", "rightClickPaste"],
+  notifications: ["notifications"],
 };
 
 const SNAKE: Record<string, keyof Config> = {
@@ -65,6 +68,7 @@ const SNAKE: Record<string, keyof Config> = {
   scrollback: "scrollback",
   copy_on_select: "copyOnSelect",
   right_click_paste: "rightClickPaste",
+  notifications: "notifications",
 };
 
 const toSnake = (k: string) => k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);

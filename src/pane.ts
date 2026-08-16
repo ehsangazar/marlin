@@ -38,6 +38,9 @@ export class Pane {
   private onTitle?: (p: Pane) => void;
   private onCwd?: (p: Pane) => void;
   private onStatus?: (p: Pane) => void;
+  onNotify?: (p: Pane, message: string) => void;
+  onFinished?: (p: Pane, failed: boolean, seconds: number) => void;
+  private startedAt = 0;
 
   constructor(
     theme: MarlinTheme,
@@ -119,6 +122,18 @@ export class Pane {
       this.onTitle?.(this);
     });
 
+    // OSC 9 (iTerm2 form) and OSC 777 (urxvt form). Any program can ask for a
+    // notification; Marlin forwards it and adds nothing of its own.
+    this.term.parser.registerOscHandler(9, (data) => {
+      this.onNotify?.(this, data.trim());
+      return true;
+    });
+    this.term.parser.registerOscHandler(777, (data) => {
+      const m = /^notify;(?:([^;]*);)?(.*)$/.exec(data);
+      if (m) this.onNotify?.(this, (m[2] ?? "").trim() || (m[1] ?? "").trim());
+      return true;
+    });
+
     // OSC 133: semantic prompt marks. The shell says "a command started" and
     // "it exited with N", and Marlin gets running/ok/failed state without
     // parsing a single character of your command line. This is the line the
@@ -127,11 +142,21 @@ export class Pane {
     this.term.parser.registerOscHandler(133, (data) => {
       const [kind, arg] = data.split(";");
       if (kind === "C") {
+        this.startedAt = Date.now();
         this.status = "run";
         this.onStatus?.(this);
       } else if (kind === "D") {
         const code = Number(arg ?? "0");
-        this.status = Number.isFinite(code) && code !== 0 ? "err" : "ok";
+        const failed = Number.isFinite(code) && code !== 0;
+        this.status = failed ? "err" : "ok";
+        // A command that finished in a pane you were not looking at is the one
+        // case worth interrupting for, and only if it ran long enough that you
+        // went and did something else.
+        const ran = Date.now() - this.startedAt;
+        if (this.startedAt && ran > 8000) {
+          this.onFinished?.(this, failed, Math.round(ran / 1000));
+        }
+        this.startedAt = 0;
         this.onStatus?.(this);
       }
       return true;

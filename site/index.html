@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marlin — a terminal built for running coding agents</title>
+<meta name="description" content="An open source terminal for running several coding agents at once. Splits that nest, vertical tabs, a git sidebar. No cloud, no account, no telemetry.">
+<meta property="og:title" content="Marlin">
+<meta property="og:description" content="A terminal built for running coding agents. No cloud, no account, no telemetry.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://marlin.gazar.dev">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230A0F16'/%3E%3Ctext x='50' y='68' font-size='58' font-family='monospace' font-weight='700' fill='%234C8DFF' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#080D14; --bar:#0C121B; --chrome:#111A26; --line:#26333F;
+    --fg:#E4ECF5; --dim:#8497AB; --acc:#5C9CFF; --vio:#9E90FF;
+    --grn:#6FE0AF; --yel:#F0C25F; --red:#FF8C8C; --cyn:#5FDCEC;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+       font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem)}
+  a{color:var(--acc)}
+  h1,h2,h3{font-family:var(--mono);font-weight:600;margin:0;text-wrap:balance}
+  code,kbd{font-family:var(--mono)}
+
+  .top{border-bottom:1px solid var(--line);background:var(--chrome)}
+  .top .wrap{display:flex;align-items:center;gap:1rem;padding-block:.7rem;flex-wrap:wrap}
+  .mark{font-family:var(--mono);font-weight:700;font-size:1rem;letter-spacing:-.01em}
+  .top nav{margin-left:auto;display:flex;gap:1.1rem;font-family:var(--mono);font-size:.78rem}
+  .top nav a{color:var(--dim);text-decoration:none}
+  .top nav a:hover{color:var(--fg)}
+
+  header{padding-block:clamp(3rem,8vw,5.5rem) clamp(2rem,5vw,3rem)}
+  .eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--dim);display:flex;align-items:center;gap:.7rem}
+  .eyebrow::after{content:"";height:1px;flex:1;background:var(--line)}
+  h1{font-size:clamp(2.2rem,6vw,3.6rem);letter-spacing:-.035em;margin:.7rem 0 0;line-height:1.03}
+  .lede{font-size:clamp(1.05rem,2.4vw,1.3rem);color:var(--dim);max-width:44ch;margin-top:1rem;line-height:1.45}
+  .lede strong{color:var(--fg);font-weight:600}
+
+  .status{margin-top:1.6rem;border:1px solid var(--yel);border-radius:8px;
+          background:rgba(240,194,95,.07);padding:.8rem 1rem;font-family:var(--mono);
+          font-size:.8rem;color:var(--yel);max-width:62ch}
+  .status b{letter-spacing:.06em;text-transform:uppercase;font-size:.72rem}
+
+  .cta{display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1.6rem}
+  .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.62rem 1.15rem;border-radius:7px;
+       font-family:var(--mono);font-size:.82rem;text-decoration:none;border:1px solid var(--line);
+       color:var(--fg);background:var(--chrome)}
+  .btn:hover{border-color:var(--acc)}
+  .btn.primary{background:var(--acc);border-color:var(--acc);color:#06101F;font-weight:600}
+
+  section{padding-block:clamp(2.4rem,6vw,4rem);border-top:1px solid var(--line)}
+  .head{display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
+  .head h2{font-size:clamp(1.35rem,3.4vw,1.9rem);letter-spacing:-.02em}
+  .head .note{font-family:var(--mono);font-size:.74rem;color:var(--dim);
+              letter-spacing:.06em;text-transform:uppercase}
+  p{margin:0 0 1rem;max-width:70ch}
+  p:last-child{margin-bottom:0}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;
+        background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .cell{background:var(--chrome);padding:1.25rem}
+  .cell h3{font-size:.95rem;margin-bottom:.45rem}
+  .cell p{color:var(--dim);font-size:.86rem;line-height:1.6;margin:0}
+  .cell .k{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;
+           color:var(--acc);margin-bottom:.7rem;text-transform:uppercase}
+
+  .sec{border:1px solid var(--grn);border-radius:10px;background:rgba(111,224,175,.05);padding:1.4rem}
+  .sec ul{list-style:none;margin:0;padding:0;display:grid;gap:.7rem}
+  .sec li{display:flex;gap:.7rem;align-items:baseline;font-size:.9rem;color:var(--dim)}
+  .sec li::before{content:"✓";color:var(--grn);font-family:var(--mono);flex:0 0 auto}
+  .sec li b{color:var(--fg);font-weight:600}
+
+  pre{font-family:var(--mono);font-size:.82rem;background:var(--chrome);border:1px solid var(--line);
+      border-radius:7px;padding:.9rem 1.05rem;margin:0 0 .7rem;overflow-x:auto;color:var(--dim)}
+  pre .p{color:var(--dim);opacity:.65}
+  pre .c{color:var(--dim);font-style:italic}
+
+  .gaps{list-style:none;padding:0;margin:0;display:grid;gap:.55rem}
+  .gaps li{display:flex;gap:.7rem;align-items:baseline;color:var(--dim);font-size:.88rem}
+  .gaps li::before{content:"✕";color:var(--dim);opacity:.6;font-family:var(--mono);flex:0 0 auto}
+  .gaps b{color:var(--fg);font-weight:600}
+
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:2rem}
+
+  footer{border-top:1px solid var(--line);padding-block:2.2rem 3rem;color:var(--dim);
+         font-family:var(--mono);font-size:.76rem}
+  footer .wrap{display:flex;gap:1rem;justify-content:space-between;flex-wrap:wrap}
+  footer a{color:var(--dim)}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="wrap">
+  <span class="mark">Marlin</span>
+  <nav>
+    <a href="#what">What it does</a>
+    <a href="#security">Security</a>
+    <a href="#install">Install</a>
+    <a href="#gaps">Not done yet</a>
+    <a href="https://github.com/ehsangazar/marlin">GitHub</a>
+  </nav>
+</div></div>
+
+<header class="wrap">
+  <div class="eyebrow">Open source terminal · MIT</div>
+  <h1>A terminal built for<br>running coding agents.</h1>
+  <p class="lede">You do not run one command and watch it any more. You run four agents in four
+  panes and none of them finishes while you are looking. <strong>Marlin is built for that.</strong></p>
+
+  <div class="status">
+    <b>Status: v0.1</b> — first working version, built 15–16 August 2026. It is used daily by its
+    author and it is early. <strong>No performance number has been measured yet</strong>, so this
+    page makes no speed claims. When there are numbers they will appear here with the method beside
+    them.
+  </div>
+
+  <div class="cta">
+    <a class="btn primary" href="#install">Install</a>
+    <a class="btn" href="https://github.com/ehsangazar/marlin">Source</a>
+    <a class="btn" href="https://github.com/sponsors/ehsangazar">Sponsor</a>
+  </div>
+</header>
+
+<section id="what" class="wrap">
+  <div class="head"><h2>What it does</h2><span class="note">All of this ships today</span></div>
+  <div class="grid">
+    <div class="cell"><span class="k">Splits</span><h3>A tab holds a tree</h3>
+      <p>Vertical and horizontal splits nest, so any mix is just what happens when you press the
+      second key. Closing a pane collapses its parent and gives the space back to its sibling.</p></div>
+    <div class="cell"><span class="k">Tabs</span><h3>Three-state bar</h3>
+      <p>Top, side, or hidden, cycled with one key. Long branch names fit down the side of a wide
+      display where they never fit across the top of one.</p></div>
+    <div class="cell"><span class="k">Git</span><h3>Staging, conflicts, diffs</h3>
+      <p>Branch, ahead count, merge conflicts, staged and changed, with stage, unstage and discard
+      on each row. Diffs render unified or side by side. It runs <em>your</em> git.</p></div>
+    <div class="cell"><span class="k">Workspaces</span><h3>A folder of repos is a folder of repos</h3>
+      <p>A directory holding several repositories shows as repositories rather than pretending to be
+      one project, which is what a working directory usually is.</p></div>
+    <div class="cell"><span class="k">Reading</span><h3>Files take over the tab</h3>
+      <p>Click a file and you get three columns: tree, file, terminal. Escape puts your exact layout
+      back. Syntax highlighting across 30 languages, and files are editable.</p></div>
+    <div class="cell"><span class="k">Agents</span><h3>Status you can see</h3>
+      <p>A dot per pane and per tab, driven by real shell marks rather than guesswork: running,
+      finished, failed. A dot appears only when a pane knows something you do not.</p></div>
+  </div>
+</section>
+
+<section id="security" class="wrap">
+  <div class="head"><h2>Security, and what leaves your machine</h2><span class="note">Nothing does</span></div>
+  <p>A terminal sees everything: your keys, your tokens, your employer's source. That makes the
+  interesting question not what a terminal can do, but what it refuses to do. Marlin's answers are
+  deliberate, and they are checkable, because the source is right there.</p>
+
+  <div class="sec">
+    <ul>
+      <li><b>No cloud, no account, no sign-in.</b> Marlin has no backend. There is nothing to log
+        into, and no service that could be down or shut off.</li>
+      <li><b>No telemetry, of any kind.</b> Not opt-out, not anonymised, not "just crash counts".
+        There is no analytics code in the app.</li>
+      <li><b>Your terminal output is never stored or sent.</b> Scrollback lives in memory in your
+        session, and the diagnostics log deliberately contains none of it, because scrollback holds
+        passwords and private source.</li>
+      <li><b>Error reports are a button, not a background job.</b> Problems are written to a local
+        file. Reporting opens a GitHub issue <em>pre-filled and editable</em>, so you read exactly
+        what you are sending before you send it.</li>
+      <li><b>No AI in the loop.</b> Marlin does not read your commands, does not send them anywhere,
+        and has no model in it. It runs agents; it is not one.</li>
+      <li><b>Your shell stays your shell.</b> Marlin never parses your command line. Completion,
+        history and autosuggestions remain fish's and zsh's job, which means your history file is
+        never duplicated somewhere new.</li>
+      <li><b>Your git is your git.</b> The sidebar shells out to the <code>git</code> binary you
+        already have, with your config, your credentials and your hooks. No second implementation
+        with its own idea of what your repository contains.</li>
+      <li><b>The webview is locked down.</b> It can receive terminal output and move its own window.
+        It has no filesystem, shell or network permission, and its content security policy blocks
+        outbound requests, so nothing the terminal prints can call home.</li>
+      <li><b>Links open in your browser, and only http and https.</b> A UI that can be navigated by
+        something the terminal <em>printed</em> is a class of problem worth closing before it exists.</li>
+      <li><b>Settings are a file you own.</b> <code>~/.config/marlin/marlin.toml</code>, plain text,
+        editable by hand, safe to keep in a dotfiles repo.</li>
+    </ul>
+  </div>
+
+  <p style="margin-top:1.3rem"><strong>One honest caveat.</strong> Builds are not yet signed with an
+  Apple Developer ID, so macOS will warn you about an unidentified developer. The instructions below
+  say how to get past it. Building from source avoids the question entirely, and is the option we
+  would pick if we were you.</p>
+</section>
+
+<section id="install" class="wrap">
+  <div class="head"><h2>Install</h2><span class="note">macOS · Apple silicon</span></div>
+  <div class="cols">
+    <div>
+      <h3 style="font-size:.95rem;margin-bottom:.6rem">From source</h3>
+      <pre><span class="p">$</span> git clone https://github.com/ehsangazar/marlin
+<span class="p">$</span> cd marlin
+<span class="p">$</span> pnpm install
+<span class="p">$</span> pnpm tauri build</pre>
+      <p style="font-size:.85rem;color:var(--dim)">Needs Node, pnpm and a stable Rust toolchain.
+      The app lands in <code>src-tauri/target/release/bundle</code>.</p>
+    </div>
+    <div>
+      <h3 style="font-size:.95rem;margin-bottom:.6rem">Shell integration</h3>
+      <pre><span class="c"># zsh</span>
+<span class="p">$</span> echo 'source ~/path/to/marlin/shell/marlin.zsh' >> ~/.zshrc
+
+<span class="c"># fish</span>
+<span class="p">$</span> echo 'source ~/path/to/marlin/shell/marlin.fish' \
+    >> ~/.config/fish/config.fish</pre>
+      <p style="font-size:.85rem;color:var(--dim)">Optional. It emits standard prompt marks so the
+      status dots and directory tracking work. Without it you get a working terminal with no dots,
+      which is degraded rather than broken.</p>
+    </div>
+  </div>
+</section>
+
+<section id="gaps" class="wrap">
+  <div class="head"><h2>Not done yet</h2><span class="note">Listed because a page of only wins is a sales page</span></div>
+  <ul class="gaps">
+    <li><b>Nothing is measured.</b> No latency, throughput or memory figures exist. That is the next
+      real piece of work, and until it is done this page claims no speed.</li>
+    <li><b>No desktop notifications</b> yet, and <b>no updater</b>.</li>
+    <li><b>Builds are unsigned</b>, so macOS will complain about an unidentified developer.</li>
+    <li><b>Linux and Windows are untested.</b> The stack is cross-platform; the testing is not.</li>
+    <li><b>No pane drag-and-drop</b>, and the settings panel does not expose everything the config
+      file can hold.</li>
+  </ul>
+</section>
+
+<section class="wrap">
+  <div class="head"><h2>Something broken?</h2><span class="note">Issues get picked up</span></div>
+  <p>Open an issue with what you did and what happened. Agents triage every issue, reproduce what
+  they can, and open a pull request where the fix is obvious. A human reviews everything before it
+  ships, so nothing lands unread.</p>
+  <div class="cta">
+    <a class="btn" href="https://github.com/ehsangazar/marlin/issues/new?labels=bug">Report a bug</a>
+    <a class="btn" href="https://github.com/ehsangazar/marlin/issues/new?labels=enhancement">Request a feature</a>
+    <a class="btn primary" href="https://github.com/sponsors/ehsangazar">Sponsor</a>
+  </div>
+  <p style="margin-top:1.2rem;font-size:.86rem;color:var(--dim)">Marlin is free and always will be.
+  Sponsorship is monthly and cancellable on purpose, because this is an early project and you should
+  be able to stop as easily as you started.</p>
+</section>
+
+<footer><div class="wrap">
+  <span>marlin.gazar.dev · built in the open since 15 Aug 2026</span>
+  <span><a href="https://github.com/ehsangazar/marlin">github.com/ehsangazar/marlin</a> · MIT</span>
+</div></footer>
+
+</body>
+</html>

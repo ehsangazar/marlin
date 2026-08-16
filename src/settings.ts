@@ -257,6 +257,15 @@ export class Settings {
       ),
     );
 
+    body.appendChild(this.group("Notifications"));
+    body.appendChild(
+      this.row(
+        "Desktop notifications",
+        "only when the window is not focused, and only for commands over 8s",
+        this.toggle(c.notifications, () => this.commit({ notifications: !c.notifications })),
+      ),
+    );
+
     card.appendChild(body);
 
     const note = document.createElement("div");

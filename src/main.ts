@@ -24,6 +24,7 @@ import { Find } from "./find";
 import { menu } from "./menu";
 import { ask } from "./prompt";
 import { Reporter } from "./report";
+import { notifier } from "./notify";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
@@ -62,6 +63,7 @@ let palette: Palette;
 let settings: Settings;
 let find: Find;
 let dragTab: number | null = null;
+let dragPane: Surface | null = null;
 let reporter: Reporter;
 let cfg: Config = { ...DEFAULTS };
 
@@ -264,7 +266,58 @@ async function makePane(): Promise<Pane> {
     },
     () => refreshChrome(),
   );
+  pane.onNotify = (p, message) => {
+    void notifier.send(p.name || "Marlin", message || "Something wants your attention");
+  };
+  pane.onFinished = (p, failed, seconds) => {
+    void notifier.send(
+      failed ? `Failed in ${p.name}` : `Finished in ${p.name}`,
+      `after ${seconds}s`,
+    );
+  };
   pane.el.addEventListener("mousedown", () => focusPane(pane));
+
+  // Drag a pane onto another to swap them. The panes swap inside their leaves
+  // rather than the tree being rebuilt, so both terminals keep their scrollback
+  // and their pty: moving a pane must not restart a shell.
+  // A grip, not the whole pane: making the terminal itself draggable would eat
+  // text selection, which is the most-used gesture in a terminal.
+  const grip = document.createElement("div");
+  grip.className = "pgrip";
+  grip.title = "Drag to swap with another pane";
+  grip.draggable = true;
+  pane.el.appendChild(grip);
+  grip.addEventListener("dragstart", (e) => {
+    dragPane = pane;
+    e.dataTransfer?.setData("text/plain", "pane");
+    pane.el.classList.add("drag");
+  });
+  grip.addEventListener("dragend", () => {
+    dragPane = null;
+    pane.el.classList.remove("drag");
+  });
+  pane.el.addEventListener("dragover", (e) => {
+    if (!dragPane || dragPane === pane) return;
+    e.preventDefault();
+    pane.el.classList.add("dragover");
+  });
+  pane.el.addEventListener("dragleave", () => pane.el.classList.remove("dragover"));
+  pane.el.addEventListener("drop", (e) => {
+    e.preventDefault();
+    pane.el.classList.remove("dragover");
+    if (!dragPane || dragPane === pane) return;
+    const tab = curTab();
+    const a = findLeaf(tab.root, dragPane);
+    const b = findLeaf(tab.root, pane);
+    if (a && b) {
+      const tmp = a.pane;
+      a.pane = b.pane;
+      b.pane = tmp;
+      render();
+      focusPane(pane);
+    }
+    dragPane = null;
+  });
   pane.el.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     focusPane(pane);
@@ -645,6 +698,7 @@ function applyConfig(next: Config): void {
   app.bar = cfg.tabBar === "top" ? "h" : cfg.tabBar === "side" ? "v" : "hidden";
   applyBar();
   app.diffMode = cfg.diffView;
+  notifier.enabled = cfg.notifications;
   requestAnimationFrame(() => {
     for (const l of leaves(curTab().root)) l.pane.resize();
   });
