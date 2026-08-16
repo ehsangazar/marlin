@@ -1,5 +1,6 @@
 import { THEMES, type MarlinTheme } from "./theme";
 import { configPath, save, type Config } from "./config";
+import { invoke } from "@tauri-apps/api/core";
 
 /**
  * One screen, grouped, no tabs and no search box, and every switch that costs
@@ -18,6 +19,7 @@ export class Settings {
   private onChange: (c: Config) => void;
   private onOpenFile: (path: string, name: string) => void;
   private path = "";
+  private version = "";
 
   constructor(
     cfg: Config,
@@ -34,6 +36,9 @@ export class Settings {
     });
     document.body.appendChild(this.el);
     void configPath().then((p) => (this.path = p));
+    void invoke<{ version: string }>("log_diagnostics")
+      .then((d) => (this.version = d.version))
+      .catch(() => {});
   }
 
   get isOpen(): boolean {
@@ -136,6 +141,10 @@ export class Settings {
 
     const h = document.createElement("h4");
     h.textContent = "Settings";
+    const ver = document.createElement("span");
+    ver.className = "sver";
+    ver.textContent = this.version ? `v${this.version}` : "";
+    h.appendChild(ver);
     const x = document.createElement("button");
     x.className = "vclose";
     x.textContent = "×";

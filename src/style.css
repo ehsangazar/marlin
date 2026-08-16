@@ -342,3 +342,6 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
          color:var(--m-red); cursor:pointer; padding:0 .3rem; border-radius:3px; }
 .sterr.on { display:inline-block; }
 .sterr:hover { background:var(--m-line); }
+
+.sheetcard h4 .sver { font-size:.6rem; font-weight:500; color:var(--m-dim);
+                      margin-left:.5rem; letter-spacing:.04em; }
