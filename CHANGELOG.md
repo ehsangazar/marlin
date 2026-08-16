@@ -8,6 +8,16 @@ version carries everything else.
 
 ## [Unreleased]
 
+### Added
+- Quitting asks first, from every route: `⌘W` on the last pane, `⌘Q`, the red button and the
+  menu's Quit all reach one confirmation. The dialog names what is live — panes, tabs, what is
+  still running, what is waiting, what has unsaved changes — because quitting is only a real
+  decision if you can see what you are throwing away.
+
+### Fixed
+- `⌘W` on the last pane used to do nothing at all. It now reads as an attempt to quit, which is
+  what it is.
+
 ## [0.1.0] - 2026-08-16
 
 First working version. Built 15 to 16 Aug 2026.

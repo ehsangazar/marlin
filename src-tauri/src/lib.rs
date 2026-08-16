@@ -43,6 +43,12 @@ fn fs_grep(path: String, query: String) -> Vec<fs::Hit> {
 }
 
 #[tauri::command]
+fn quit_app(app: AppHandle) {
+    log::mark_clean_exit();
+    app.exit(0);
+}
+
+#[tauri::command]
 fn log_write(level: String, message: String) {
     log::write(&level, &message);
 }
@@ -178,6 +184,7 @@ pub fn run() {
             fs_detect,
             fs_walk,
             fs_grep,
+            quit_app,
             log_write,
             log_diagnostics,
             log_clear_crash_flag,

@@ -22,9 +22,10 @@ import { Settings, themeByName } from "./settings";
 import { load as loadConfig, save as saveConfig, DEFAULTS, type Config } from "./config";
 import { Find } from "./find";
 import { menu } from "./menu";
-import { ask } from "./prompt";
+import { ask, confirm } from "./prompt";
 import { Reporter } from "./report";
 import { notifier } from "./notify";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
@@ -418,16 +419,49 @@ async function openTerminalIn(dir: string): Promise<void> {
   render();
 }
 
+/**
+ * What is still live, in the words someone would use about it. Quitting is only
+ * a real decision if the dialog says what is being thrown away.
+ */
+function liveSummary(): string {
+  const panes = app.tabs.flatMap((t) => leaves(t.root).map((l) => l.pane));
+  const terms = panes.filter(isTerm);
+  const running = terms.filter((p) => p.status === "run").length;
+  const waiting = terms.filter((p) => p.status === "wait").length;
+  const dirty = panes.filter((p) => p instanceof Viewer && p.isDirty).length;
+
+  const bits: string[] = [];
+  bits.push(`${terms.length} ${terms.length === 1 ? "pane" : "panes"} across ${app.tabs.length} ${app.tabs.length === 1 ? "tab" : "tabs"}`);
+  if (running) bits.push(`${running} still running`);
+  if (waiting) bits.push(`${waiting} waiting for you`);
+  if (dirty) bits.push(`${dirty} with unsaved changes`);
+  return bits.join(", ") + ".";
+}
+
+/** The only path that ends the app, so the confirmation cannot be bypassed by
+ *  arriving from a different direction. */
+async function confirmQuit(reason: string): Promise<void> {
+  const ok = await confirm({
+    title: "Quit Marlin?",
+    body: `${reason} ${liveSummary()} Every shell in it will be terminated.`,
+    ok: "Quit",
+    danger: true,
+  });
+  if (ok) await invoke("quit_app").catch(() => {});
+}
+
 function closeFocused(): void {
   const tab = curTab();
   if (!app.focused) return;
   const target = findLeaf(tab.root, app.focused);
   if (!target) return;
 
-  // Last pane in the tab closes the tab. Last tab in the window stays: a
-  // terminal with nothing in it is not a state worth being able to reach.
+  // Last pane in the tab closes the tab. Last pane in the last tab means the
+  // window would be empty, which is not a state worth reaching: at that point
+  // Cmd+W is someone trying to quit, so treat it as that and ask.
   if (leaves(tab.root).length === 1) {
     if (app.tabs.length > 1) closeTab(app.active);
+    else void confirmQuit("This is the last pane, so closing it closes Marlin.");
     return;
   }
 
@@ -543,6 +577,10 @@ function handleShortcut(e: KeyboardEvent): boolean {
   }
   if (k === "w") {
     closeFocused();
+    return false;
+  }
+  if (k === "q") {
+    void confirmQuit("You pressed ⌘Q.");
     return false;
   }
   if (k === "t") {
@@ -882,6 +920,15 @@ async function boot(): Promise<void> {
   document.getElementById("lnk-sponsor")?.addEventListener("click", () =>
     openExternal("https://github.com/sponsors/ehsangazar"),
   );
+
+  // The red button and the menu's Quit arrive here too, so there is one
+  // confirmation rather than one per entry point.
+  void getCurrentWindow()
+    .onCloseRequested(async (e) => {
+      e.preventDefault();
+      await confirmQuit("You asked to close the window.");
+    })
+    .catch(() => {});
 
   find = new Find();
   settings = new Settings(

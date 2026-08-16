@@ -355,3 +355,14 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .pgrip:hover { opacity:1 !important; }
 .pane-term.drag { opacity:.4; }
 .pane-term.dragover { outline:2px dashed var(--m-vio); outline-offset:-3px; }
+
+.askbox.confirm { width:min(420px,92%); }
+.asktitle.strong { color:var(--m-fg); font-size:.82rem; font-weight:600; margin-bottom:.35rem; }
+.askbody { font-size:.74rem; color:var(--m-dim); line-height:1.55; }
+.askrow { display:flex; gap:.5rem; justify-content:flex-end; margin-top:.9rem; }
+.askbtn { font:inherit; font-size:.72rem; padding:.34rem .8rem; border-radius:5px;
+          background:var(--m-bg); color:var(--m-fg); border:1px solid var(--m-line); cursor:pointer; }
+.askbtn:hover { border-color:var(--m-acc); }
+.askbtn.primary { background:var(--m-acc); border-color:var(--m-acc); color:#06101F; font-weight:600; }
+.askbtn.primary.danger { background:var(--m-red); border-color:var(--m-red); }
+.askbtn:focus-visible { outline:2px solid var(--m-acc); outline-offset:2px; }
