@@ -24,15 +24,21 @@ export class Pane {
   /** Set by hand pins the name and stops the shell overwriting it. */
   pinned = false;
   status: PaneStatus = null;
-  cwd = "~";
+  cwd = "";
   ptyId: number | null = null;
 
   private fit = new FitAddon();
   private webgl: WebglAddon | null = null;
   private onTitle?: (p: Pane) => void;
+  private onCwd?: (p: Pane) => void;
 
-  constructor(theme: MarlinTheme, onTitle?: (p: Pane) => void) {
+  constructor(
+    theme: MarlinTheme,
+    onTitle?: (p: Pane) => void,
+    onCwd?: (p: Pane) => void,
+  ) {
     this.onTitle = onTitle;
+    this.onCwd = onCwd;
     this.el = document.createElement("div");
     this.el.className = "pane-term";
 
@@ -93,6 +99,21 @@ export class Pane {
       if (this.pinned || !t) return;
       this.name = t;
       this.onTitle?.(this);
+    });
+
+    // OSC 7 carries the working directory, and it is the single cheapest signal
+    // in the whole app: the sidebar, the git panel and the project detection
+    // all hang off knowing where a pane is, and the shell already emits it.
+    this.term.parser.registerOscHandler(7, (data) => {
+      const m = /^file:\/\/[^/]*(\/.*)$/.exec(data);
+      if (m?.[1]) {
+        const next = decodeURIComponent(m[1]);
+        if (next !== this.cwd) {
+          this.cwd = next;
+          this.onCwd?.(this);
+        }
+      }
+      return true;
     });
   }
 

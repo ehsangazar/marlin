@@ -14,6 +14,8 @@ import {
   type Tab,
 } from "./layout";
 import { THEMES, applyTheme, type MarlinTheme } from "./theme";
+import { Sidebar } from "./sidebar";
+import { invoke } from "@tauri-apps/api/core";
 
 interface PtyOutput {
   id: number;
@@ -28,6 +30,7 @@ const app = {
   active: 0,
   focused: null as Pane | null,
   bar: "h" as BarState,
+  tree: true,
 };
 
 const els = {
@@ -40,7 +43,11 @@ const els = {
   stTabs: document.getElementById("st-tabs") as HTMLSpanElement,
   stShell: document.getElementById("st-shell") as HTMLSpanElement,
   stBar: document.getElementById("st-bar") as HTMLSpanElement,
+  main: document.querySelector(".main") as HTMLDivElement,
+  tree: document.getElementById("tree") as HTMLElement,
 };
+
+let sidebar: Sidebar;
 
 const curTab = (): Tab => app.tabs[app.active] as Tab;
 const allPanes = (): Pane[] => app.tabs.flatMap((t) => leaves(t.root).map((l) => l.pane));
@@ -136,11 +143,18 @@ function focusPane(p: Pane): void {
   app.focused = p;
   for (const l of leaves(curTab().root)) l.pane.el.classList.toggle("focus", l.pane === p);
   p.focus();
+  if (p.cwd) void sidebar.setCwd(p.cwd);
   refreshChrome();
 }
 
 async function makePane(): Promise<Pane> {
-  const pane = new Pane(app.theme, () => refreshChrome());
+  const pane = new Pane(
+    app.theme,
+    () => refreshChrome(),
+    (p) => {
+      if (p === app.focused) void sidebar.setCwd(p.cwd);
+    },
+  );
   pane.el.addEventListener("mousedown", () => focusPane(pane));
   pane.term.attachCustomKeyEventHandler(handleShortcut);
   return pane;
@@ -236,8 +250,9 @@ function handleShortcut(e: KeyboardEvent): boolean {
     void newTab();
     return false;
   }
-  if (k === "b" && e.shiftKey) {
-    cycleBar();
+  if (k === "b") {
+    if (e.shiftKey) cycleBar();
+    else toggleTree();
     return false;
   }
   if (k === "]" || (k === "}" && e.shiftKey)) {
@@ -253,6 +268,14 @@ function handleShortcut(e: KeyboardEvent): boolean {
     return false;
   }
   return true;
+}
+
+function toggleTree(): void {
+  app.tree = !app.tree;
+  els.main.classList.toggle("notree", !app.tree);
+  requestAnimationFrame(() => {
+    for (const l of leaves(curTab().root)) l.pane.resize();
+  });
 }
 
 function setTheme(t: MarlinTheme): void {
@@ -281,6 +304,22 @@ async function boot(): Promise<void> {
   applyBar();
   document.getElementById("btn-new")?.addEventListener("click", () => void newTab());
   document.getElementById("btn-bar")?.addEventListener("click", cycleBar);
+  document.getElementById("btn-tree")?.addEventListener("click", toggleTree);
+
+  sidebar = new Sidebar(els.tree, {
+    openFile: (path, name) => console.log("open", name, path),
+    openDiff: (cwd, path, name) => console.log("diff", name, path, cwd),
+    gitAction: async (action, cwd, path) => {
+      const cmd = action === "stage" ? "git_stage" : action === "unstage" ? "git_unstage" : "git_discard";
+      try {
+        await invoke(cmd, { cwd, path });
+      } catch (err) {
+        console.error("marlin: git", action, "failed", err);
+      }
+      await sidebar.refresh();
+    },
+  });
+  void sidebar.setCwd(await invoke<string>("fs_home"));
 
   const first = await makePane();
   app.tabs.push({ name: "", pinned: false, root: leaf(first) });

@@ -1,7 +1,59 @@
+mod fs;
+mod git;
 mod pty;
 
 use pty::Shared;
 use tauri::{AppHandle, Manager, State};
+
+#[tauri::command]
+fn fs_list(path: String) -> Result<Vec<fs::Entry>, String> {
+    fs::list_dir(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn fs_read(path: String) -> Result<String, String> {
+    fs::read_text(&path, 512 * 1024).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn fs_detect(path: String) -> fs::Project {
+    fs::detect(&path)
+}
+
+#[tauri::command]
+fn fs_home() -> String {
+    fs::home()
+}
+
+#[tauri::command]
+fn fs_display(path: String) -> String {
+    fs::display_path(&path)
+}
+
+#[tauri::command]
+fn git_status(cwd: String) -> Result<git::GitStatus, String> {
+    git::status(&cwd).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_diff(cwd: String, path: String, staged: bool) -> Result<String, String> {
+    git::diff(&cwd, &path, staged).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_stage(cwd: String, path: String) -> Result<(), String> {
+    git::stage(&cwd, &path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_unstage(cwd: String, path: String) -> Result<(), String> {
+    git::unstage(&cwd, &path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_discard(cwd: String, path: String) -> Result<(), String> {
+    git::discard(&cwd, &path).map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 fn pty_spawn(
@@ -43,7 +95,17 @@ pub fn run() {
             pty_spawn,
             pty_write,
             pty_resize,
-            pty_close
+            pty_close,
+            fs_list,
+            fs_read,
+            fs_detect,
+            fs_home,
+            fs_display,
+            git_status,
+            git_diff,
+            git_stage,
+            git_unstage,
+            git_discard
         ])
         .run(tauri::generate_context!())
         .expect("marlin failed to start");

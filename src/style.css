@@ -75,3 +75,51 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .tt { background:none; border:0; color:var(--m-dim); font:inherit; font-size:.8rem;
       line-height:1; padding:.25rem .4rem; border-radius:4px; cursor:pointer; }
 .tt:hover { background:var(--m-line); color:var(--m-fg); }
+
+/* Sidebar: fixed on the left, whatever the tab bar is doing. A sidebar that
+   moves is a sidebar you have to look for. */
+.tree { width:212px; flex:0 0 212px; background:var(--m-bar); overflow:auto;
+        border-right:1px solid var(--m-line); padding-bottom:6px; user-select:none; }
+.main.notree .tree { display:none; }
+.treehead { display:flex; align-items:center; gap:.4rem; padding:.42rem .6rem;
+            font-size:.62rem; color:var(--m-dim); letter-spacing:.06em;
+            border-bottom:1px solid var(--m-line); margin-bottom:4px;
+            position:sticky; top:0; background:var(--m-bar); }
+.treehead .ok2 { color:var(--m-vio); margin-left:auto; white-space:nowrap; }
+
+.tsec { font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; color:var(--m-dim);
+        padding:.5rem .6rem .25rem; display:flex; align-items:center; gap:.35rem; cursor:pointer; }
+.tsec:hover { color:var(--m-fg); }
+.tsec .cnt { margin-left:auto; color:var(--m-dim); background:var(--m-line);
+             border-radius:9px; padding:0 .32rem; }
+
+.trow { display:flex; align-items:center; gap:.3rem; padding:.1rem .5rem .1rem .35rem;
+        font-size:.71rem; color:var(--m-dim); cursor:pointer; white-space:nowrap; }
+.trow:hover { background:var(--m-chrome); color:var(--m-fg); }
+.trow.sel { background:var(--m-chrome); color:var(--m-fg); box-shadow:inset 2px 0 0 var(--m-acc); }
+.gd { width:.62rem; flex:0 0 auto; align-self:stretch; border-left:1px solid var(--m-line); }
+.tw { width:10px; text-align:center; flex:0 0 auto; font-size:.6rem; opacity:.75; }
+.ic { width:11px; text-align:center; flex:0 0 auto; font-size:.66rem; }
+.trow.dir > .ic { color:var(--m-acc); }
+.trow.repo > .ic { color:var(--m-vio); }
+.ic.cfg { color:var(--m-vio); }
+.nm { overflow:hidden; text-overflow:ellipsis; }
+.ext-rs{color:var(--m-yel)} .ext-toml{color:var(--m-cyn)} .ext-md{color:var(--m-acc)}
+.ext-ts{color:var(--m-acc)} .ext-json{color:var(--m-grn)} .ext-css{color:var(--m-vio)}
+
+.scbar { display:flex; align-items:center; gap:.4rem; padding:.32rem .5rem;
+         font-size:.66rem; color:var(--m-fg); border-bottom:1px solid var(--m-line); }
+.scbar .ic { color:var(--m-vio); }
+.scbar .ab { color:var(--m-dim); font-size:.62rem; margin-left:auto; }
+.sgh { display:flex; align-items:center; gap:.4rem; padding:.34rem .5rem .14rem .6rem;
+       font-size:.6rem; letter-spacing:.08em; text-transform:uppercase; color:var(--m-dim); }
+.sgh .n { margin-left:auto; }
+.sgh.conf { color:var(--m-red); }
+.facts { margin-left:auto; display:flex; gap:1px; opacity:0; flex:0 0 auto; }
+.trow:hover .facts { opacity:1; }
+.fact { color:var(--m-dim); font-size:.7rem; padding:0 .22rem; border-radius:3px; line-height:1.1; }
+.fact:hover { background:var(--m-line); color:var(--m-fg); }
+.fact.dz:hover { color:var(--m-red); }
+.gst { font-size:.62rem; padding-left:.4rem; flex:0 0 auto; }
+.gst.M{color:var(--m-yel)} .gst.A{color:var(--m-grn)} .gst.D{color:var(--m-red)}
+.gst.C{color:var(--m-red)} .gst.U{color:var(--m-dim)} .gst.R{color:var(--m-cyn)}
