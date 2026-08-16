@@ -82,41 +82,64 @@ impl Ptys {
             },
         );
 
-        // Read big and coalesce. Emitting per byte, or per read of a few
-        // hundred bytes, is how a terminal loses to `cat` on a large file: the
-        // cost is per-message, not per-byte.
+        // Coalescing has to be free when there is nothing to coalesce, and that
+        // is why this is two threads and a channel rather than one loop.
+        //
+        // A single loop can only ask "is there more?" by reading again, and a
+        // read on a pty master blocks. Coalescing that way holds the echo of
+        // every keystroke hostage until the *next* one arrives, which is felt
+        // as the whole terminal typing a character behind. Handing the bytes to
+        // a channel makes the same question non-blocking: `try_recv` answers
+        // "nothing yet" instantly, so a lone keystroke is emitted the moment it
+        // is read, and a flood still collapses into one IPC hop.
+        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+
+        // Reader: blocking reads straight into the channel, never waiting on
+        // the webview. A slow frame must not back-pressure the shell.
         std::thread::spawn(move || {
             let mut buf = [0u8; 64 * 1024];
-            let mut pending = Vec::<u8>::with_capacity(64 * 1024);
             loop {
                 match reader.read(&mut buf) {
-                    Ok(0) => break,
+                    Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        pending.extend_from_slice(&buf[..n]);
-                        // Drain whatever else is already waiting before we pay
-                        // for an IPC hop.
-                        while pending.len() < 512 * 1024 {
-                            match reader.read(&mut buf) {
-                                Ok(0) => break,
-                                Ok(n2) => pending.extend_from_slice(&buf[..n2]),
-                                Err(_) => break,
-                            }
+                        if tx.send(buf[..n].to_vec()).is_err() {
                             break;
                         }
-                        let text = String::from_utf8_lossy(&pending).to_string();
-                        pending.clear();
-                        let _ = app.emit(
-                            "pty:data",
-                            Output {
-                                id,
-                                data: text,
-                            },
-                        );
                     }
-                    Err(_) => break,
                 }
             }
             let _ = child.wait();
+            // Dropping tx here is what tells the emitter the shell is gone.
+        });
+
+        // Emitter: one blocking wait, then take everything already queued.
+        std::thread::spawn(move || {
+            let mut carry = Vec::<u8>::new();
+            while let Ok(first) = rx.recv() {
+                let mut pending = std::mem::take(&mut carry);
+                pending.extend_from_slice(&first);
+                while pending.len() < 512 * 1024 {
+                    match rx.try_recv() {
+                        Ok(more) => pending.extend_from_slice(&more),
+                        Err(_) => break,
+                    }
+                }
+                // A chunk boundary can land inside a multi-byte character, and
+                // lossy conversion would turn it into a replacement character
+                // that never recovers. Hold the incomplete tail (at most three
+                // bytes) for the next round instead.
+                let good = match std::str::from_utf8(&pending) {
+                    Ok(_) => pending.len(),
+                    Err(e) if e.error_len().is_none() => e.valid_up_to(),
+                    Err(_) => pending.len(),
+                };
+                carry.extend_from_slice(&pending[good..]);
+                if good == 0 {
+                    continue;
+                }
+                let text = String::from_utf8_lossy(&pending[..good]).into_owned();
+                let _ = app.emit("pty:data", Output { id, data: text });
+            }
             let _ = app.emit("pty:exit", id);
         });
 
