@@ -240,18 +240,44 @@ jobs:
           # /S is NSIS silent. installMode is currentUser, so no elevation.
           Start-Process -FilePath $setup.FullName -ArgumentList "/S" -Wait
 
-          # Found, not assumed. The executable is named after mainBinaryName
-          # ("marlin") while the install directory comes from productName
-          # ("Marlin"), and Tauri has changed which of those wins before. NTFS
-          # is case-insensitive so the case does not matter, but the directory
-          # might, and a smoke test that fails because it guessed a path is
-          # worse than no smoke test.
-          $exe = Get-ChildItem -Recurse -Filter "marlin.exe" -Path "$env:LOCALAPPDATA\Programs" `
-            -ErrorAction SilentlyContinue | Select-Object -First 1
+          # Found, not assumed, and the first run of this proved why: it looked
+          # only under $LOCALAPPDATA\Programs, which does not exist on a fresh
+          # runner at all, so it reported "the installer produced no marlin.exe"
+          # about an installer that had worked. Ask NSIS where it put things
+          # instead of guessing: it always writes an uninstall entry, and
+          # InstallLocation is the answer regardless of which default Tauri's
+          # template picked this month.
+          $roots = @()
+          foreach ($hive in "HKCU:", "HKLM:") {
+            Get-ItemProperty -ErrorAction SilentlyContinue `
+              -Path "$hive\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" |
+              Where-Object { $_.DisplayName -like "Marlin*" -and $_.InstallLocation } |
+              ForEach-Object {
+                Write-Host "uninstall entry: $($_.DisplayName) -> $($_.InstallLocation)"
+                $roots += $_.InstallLocation
+              }
+          }
+          # Filesystem fallback, widened to every root the two install modes can
+          # land in. Only reached if the registry lookup found nothing.
+          $roots += "$env:LOCALAPPDATA", "$env:ProgramFiles", "${env:ProgramFiles(x86)}"
+
+          $exe = $null
+          foreach ($root in $roots) {
+            if (-not $root -or -not (Test-Path $root)) { continue }
+            $exe = Get-ChildItem -Recurse -Filter "marlin.exe" -Path $root `
+              -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($exe) { break }
+          }
           if (-not $exe) {
-            Write-Host "nothing installed under $env:LOCALAPPDATA\Programs. What is there:"
-            Get-ChildItem -Recurse -Depth 2 -Path "$env:LOCALAPPDATA\Programs" -ErrorAction SilentlyContinue |
-              ForEach-Object { Write-Host "  $($_.FullName)" }
+            Write-Host "no marlin.exe under any of:"
+            $roots | ForEach-Object { Write-Host "  $_" }
+            Write-Host "uninstall entries mentioning Marlin:"
+            foreach ($hive in "HKCU:", "HKLM:") {
+              Get-ItemProperty -ErrorAction SilentlyContinue `
+                -Path "$hive\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" |
+                Where-Object { $_.DisplayName -like "*arlin*" } |
+                ForEach-Object { Write-Host "  $($_.DisplayName) @ $($_.InstallLocation)" }
+            }
             throw "the installer ran but produced no marlin.exe"
           }
           Write-Host "installed: $($exe.FullName)"
