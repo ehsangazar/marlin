@@ -165,3 +165,94 @@ pub fn unstage(cwd: &str, path: &str) -> Result<()> {
 pub fn discard(cwd: &str, path: &str) -> Result<()> {
     git(cwd, &["restore", "--", path]).map(|_| ())
 }
+
+#[derive(Serialize, Clone, Debug)]
+pub struct RepoStatus {
+    pub name: String,
+    pub path: String,
+    pub branch: String,
+    pub ahead: u32,
+    pub behind: u32,
+    pub changes: u32,
+    pub conflicts: u32,
+}
+
+/// Status for every repository one level under `root`.
+///
+/// This is N subprocesses, so it is deliberately **not** on a timer: it runs on
+/// a `cd` or an explicit refresh and nothing else. They run in parallel because
+/// nine repositories serially is nine round trips of latency for something the
+/// eye reads as one list.
+pub fn workspace(root: &str) -> Vec<RepoStatus> {
+    let mut dirs: Vec<(String, String)> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(root) {
+        for e in rd.flatten() {
+            if !e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            if e.path().join(".git").exists() {
+                dirs.push((
+                    e.file_name().to_string_lossy().to_string(),
+                    e.path().to_string_lossy().to_string(),
+                ));
+            }
+        }
+    }
+    dirs.sort();
+
+    let mut out: Vec<RepoStatus> = std::thread::scope(|s| {
+        let handles: Vec<_> = dirs
+            .iter()
+            .map(|(name, path)| {
+                s.spawn(move || {
+                    let st = status(path).unwrap_or_default();
+                    RepoStatus {
+                        name: name.clone(),
+                        path: path.clone(),
+                        branch: st.branch,
+                        ahead: st.ahead,
+                        behind: st.behind,
+                        // A file changed in both the index and the worktree is
+                        // one file to a human, so count paths rather than rows.
+                        changes: {
+                            let mut seen: Vec<&str> = st
+                                .staged
+                                .iter()
+                                .chain(st.changes.iter())
+                                .map(|f| f.path.as_str())
+                                .collect();
+                            seen.sort_unstable();
+                            seen.dedup();
+                            seen.len() as u32
+                        },
+                        conflicts: st.conflicts.len() as u32,
+                    }
+                })
+            })
+            .collect();
+        handles.into_iter().filter_map(|h| h.join().ok()).collect()
+    });
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    /// Not a unit test of pure logic. The parsing was never the risky part; the
+    /// risky part is whether the scan finds real repositories on a real disk,
+    /// which is what silently returned nothing. Point it somewhere real with
+    /// `MARLIN_SCAN_ROOT` and it becomes a genuine check.
+    #[test]
+    fn scans_a_directory_of_repositories() {
+        let root = std::env::var("MARLIN_SCAN_ROOT").unwrap_or_else(|_| "..".into());
+        let repos = super::workspace(&root);
+        eprintln!("root={root} repos={}", repos.len());
+        for r in &repos {
+            eprintln!(
+                "  {:<16} {:<22} +{} -{}  {} changed",
+                r.name, r.branch, r.ahead, r.behind, r.changes
+            );
+        }
+        assert!(!repos.is_empty(), "no repositories found under {root}");
+    }
+}
