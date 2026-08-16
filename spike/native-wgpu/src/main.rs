@@ -235,8 +235,12 @@ impl Gpu {
             .map(|(text, color)| (text.as_str(), default_attrs.clone().color(*color)))
             .collect();
 
+        // Basic, not Advanced. Advanced runs complex-script shaping over the
+        // whole screen on every frame; terminal output is overwhelmingly ASCII
+        // and does not need it. This is a stopgap, not the fix: see the note on
+        // `snapshot`.
         self.buffer
-            .set_rich_text(rich, &default_attrs, Shaping::Advanced, None);
+            .set_rich_text(rich, &default_attrs, Shaping::Basic, None);
         self.buffer.shape_until_scroll(&mut self.font_system, false);
 
         self.viewport.update(
@@ -373,8 +377,18 @@ impl Marlin {
         Ok(())
     }
 
-    /// Snapshot the grid into coloured runs. Cheap and allocation-heavy, which
-    /// is fine for a spike: Phase 1 replaces this with cached shaped rows.
+    /// Snapshot the grid into coloured runs.
+    ///
+    /// **This is the wrong architecture and it is why the spike is slow.** It
+    /// allocates a String per colour run for the entire screen, then hands the
+    /// lot to cosmic-text, which lays the whole screen out as a paragraph and
+    /// reshapes every glyph. That happens on every frame, so typing one
+    /// character re-lays-out 3,000 cells.
+    ///
+    /// A terminal is a grid, not a document. The real renderer shapes each
+    /// unique glyph once into the atlas and emits per-cell quads, touching only
+    /// damaged cells. Kept here deliberately so the benchmark has a baseline to
+    /// beat.
     fn snapshot(&self) -> Vec<(String, GColor)> {
         let Some(term) = &self.term else {
             return vec![];
@@ -448,6 +462,11 @@ impl ApplicationHandler<UserEvent> for Marlin {
         }
         self.window = Some(window);
         self.draw();
+
+        if std::env::args().any(|a| a == "--bench") {
+            bench(self, 200);
+            event_loop.exit();
+        }
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
@@ -517,6 +536,31 @@ impl ApplicationHandler<UserEvent> for Marlin {
             _ => {}
         }
     }
+}
+
+/// Render N frames back to back and report the distribution.
+///
+/// Exists so "it feels slow" becomes a number that can be compared before and
+/// after the renderer is rewritten. p99, not the mean: a terminal that is fast
+/// on average and stutters at the 99th percentile feels slow, and the mean hides
+/// exactly that.
+fn bench(app: &mut Marlin, frames: usize) {
+    let mut times: Vec<f64> = Vec::with_capacity(frames);
+    for _ in 0..frames {
+        let t = std::time::Instant::now();
+        app.draw();
+        times.push(t.elapsed().as_secs_f64() * 1000.0);
+    }
+    times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let p = |q: f64| times[((times.len() as f64 - 1.0) * q) as usize];
+    println!(
+        "marlin bench: {} frames  p50 {:.2} ms  p99 {:.2} ms  max {:.2} ms  ({:.0} fps at p50)",
+        frames,
+        p(0.50),
+        p(0.99),
+        times[times.len() - 1],
+        1000.0 / p(0.50).max(0.0001)
+    );
 }
 
 fn main() -> anyhow::Result<()> {
