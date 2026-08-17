@@ -16,8 +16,16 @@
   `⌘1`–`⌘9`, and `⌃⇥` / `⌃⇧⇥` to cycle, which is what most people's fingers already do.
 - **An explorer and real git status.** Branch, ahead count, merge conflicts, staged and changed,
   with stage, unstage and discard on each row. It shells out to **your** git.
-- **Workspaces.** A directory holding several repositories shows as repositories rather than
-  pretending to be one project, which is what a working directory usually is.
+- **Every repository in the tree wears its branch and its change count.** A directory of
+  repositories is what a working directory usually is, so a folder that is one says which branch
+  it is on and how many files are uncommitted, without you navigating into it. Click the branch
+  to switch branch; click the count to list the files and open any of their diffs. Neither runs
+  on a timer: both are read once and then held until you press Refresh.
+- **A branch switcher.** Filter as you type, arrows to walk the list, Return to switch. Local
+  branches switch, remote ones check out as a local branch that tracks them, a name that matches
+  nothing offers to create it, and deleting asks first and then asks again if git says the branch
+  is not fully merged. Click any branch to see what it has that yours does not, and click a file
+  there to read the diff. Merging, rebasing, pushing and pulling stay in the terminal below.
 - **Reading takes over the tab.** Click a file or a diff and you get three columns: tree, file,
   terminal. `Esc` puts your exact layout back. Diffs render unified or side by side.
 - **A command palette.** `⌘⇧P` commands, `⌘P` go to file, `⌘⇧F` search every file's text.
@@ -28,14 +36,23 @@
 - **Status dots** from real shell marks, not guesswork. See below.
 - **Syntax highlighting** across 30 languages, themed through the active palette.
 - **Editing**, with a write refused if the file changed on disk since you opened it.
-- **Find in scrollback**, zoom pane, directional pane focus, drag to reorder tabs, and
+- **Find in scrollback**, zoom pane, directional pane focus, drag tabs to reorder them, and
   right-click menus everywhere including the tree.
+- **Zoom the whole interface.** `⌘+` and `⌘-` in ten per cent steps, `⌘0` back to life size.
+  Chrome and terminals scale together, and the level is a config key, so it survives a quit.
 - **Named panes.** Every pane wears its name and its status dot on a title bar of its own.
   Double-click the bar to rename it, which pins the name so the shell stops changing it. Turn
   the row off in Settings if you want the height back.
+- **Closing asks, and says what it is closing.** `⌘W` names the pane it is about to close, or
+  the tab when that pane was its last, or Marlin when that tab was your last, and each dialog
+  lists what is still running in it. Closing a tab from its × or its menu asks the same way.
+  Return answers whichever button has focus, which is Cancel.
 - **Panes that move.** Drag a pane by its title bar onto the middle of another to swap them,
   onto an edge to move it there and split, or onto a tab to send it to that tab. Panes are
-  moved, not rebuilt, so a pane keeps its scrollback and its shell wherever it lands.
+  moved, not rebuilt, so a pane keeps its scrollback and its shell wherever it lands. Dragging
+  is done with mouse events rather than HTML5 drag and drop, which cannot work in this window:
+  the webview is claimed as an OS drag destination so that files dragged in from Finder are
+  delivered, and that swallows the page's own drags whole.
 - **Your layout comes back.** Tabs, splits, working directories and pinned names are restored
   on launch from `~/.config/marlin/session.json`. Scrollback and running processes are not,
   and pretending otherwise would mean faking a screen with no process behind it.

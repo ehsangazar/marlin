@@ -9,6 +9,24 @@ version carries everything else.
 ## [Unreleased]
 
 ### Added
+- Every folder in the explorer that is a git repository shows the branch it is on and how many
+  files are uncommitted. The branch opens a **branch switcher**: filter as you type, arrows to
+  walk the list, Return to switch, a name matching nothing offers to create it, and deleting
+  asks first and then asks again with git's own words if the branch is not fully merged. Remote
+  branches are listed separately and check out as a local branch that tracks them, with a Fetch
+  button so that list is not stale. Clicking any branch shows what it has that yours does not,
+  three-dot, and clicking a file there opens its diff in the tab. The change count opens the
+  same list for what is uncommitted. Branches come from `.git/HEAD`, read as a file, so a folder
+  of repositories costs no subprocesses to label; counts are a real `git status` each, run in
+  parallel and then cached until an explicit refresh.
+- A **Refresh** button on the explorer header. Nothing in the sidebar polls, deliberately, so a
+  change made by an agent in another window used to sit there looking current.
+- **Zoom.** `⌘+` and `⌘-` in ten per cent steps between 70% and 200%, `⌘0` back to 100%. Chrome
+  scales through the root font size and terminals through their own, so they move together.
+  Saved as `zoom` under `[appearance]`.
+- Dialogs have buttons as well as keys, and each button carries the key that presses it. The
+  rename box gained Save and Cancel; the keys had only ever been written in a hint line.
+- An application menu, replacing the default one Tauri installs when an app declares none.
 - `⌃⇥` and `⌃⇧⇥` cycle tabs, alongside the existing `⌘]` and `⌘[`. Two bindings for one action
   on purpose: the rest of this key map is iTerm2's, but Ctrl+Tab is what browsers, editors and
   Windows Terminal use, and it costs the shell nothing because a tty has no encoding for it.
@@ -19,7 +37,30 @@ version carries everything else.
   replacing the grip that only appeared on hover. `pane_titles = false` under `[layout]`, or
   the Settings toggle, gives the row back to the terminal.
 
+### Removed
+- The **Repositories** panel above the explorer. Every repository folder in the tree now carries
+  its own branch and change count, so the panel was a second answer to a question the tree was
+  already answering, and it cost a `git status` per sibling repository on every `cd`.
+
 ### Fixed
+- **`⌘W` closed the window instead of the pane, and `⌘Q` quit without asking.** Setting no menu
+  is not the same as having no menu: Tauri installs a default one that owns both accelerators,
+  and AppKit matches a menu's key equivalent before the keystroke reaches the webview, so the
+  key map never ran for either. `⌘Q` also bypassed the clean-exit marker, which the next launch
+  read as a crash.
+- **Closing anything now asks, and names what it is closing**: the pane, or the tab when that
+  pane was its last, or Marlin when that tab was your last, each listing what is still running.
+  The × on a tab and the tab menu ask the same way; Close Other Tabs asks once for the batch.
+- **Return in a confirmation always answered yes**, even though Cancel held the focus and the
+  code claimed that focus was the safety. It now answers the focused button.
+- **Double-clicking a pane title or a tab never renamed anything.** WebKit does not deliver
+  `dblclick` on a draggable element, and both are drag handles.
+- **Dragging tabs to reorder them, dragging panes to move or swap them, and dropping a pane on
+  a tab had never worked.** All three were built on HTML5 drag and drop, which cannot function
+  in this window: Tauri claims the webview as an OS drag destination so Finder drops are
+  delivered, and reports every drag as handled, so WebKit dispatches no `dragover` or `drop` to
+  the page at all. `dragstart` still fires, which is why the code looked right. All three are
+  now mouse events.
 - Dragging a file in from Finder landed it in whichever pane sat nearest the top-left corner
   instead of the one under the cursor. The drop position is logical pixels on macOS, and it
   was being scaled again as though it were physical.
