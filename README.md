@@ -19,8 +19,10 @@
 - **Every repository in the tree wears its branch and its change count.** A directory of
   repositories is what a working directory usually is, so a folder that is one says which branch
   it is on and how many files are uncommitted, without you navigating into it. Click the branch
-  to switch branch; click the count to list the files and open any of their diffs. Neither runs
-  on a timer: both are read once and then held until you press Refresh.
+  to switch branch. Click the count and the sidebar grows a tab of its own next to Explorer,
+  listing that repository's changed files: click one for its diff, stage or discard from the
+  row, close the tab when you are done. Neither number runs on a timer: both are read once and
+  then held until you press Refresh.
 - **A branch switcher.** Filter as you type, arrows to walk the list, Return to switch. Local
   branches switch, remote ones check out as a local branch that tracks them, a name that matches
   nothing offers to create it, and deleting asks first and then asks again if git says the branch
@@ -43,6 +45,17 @@
 - **Named panes.** Every pane wears its name and its status dot on a title bar of its own.
   Double-click the bar to rename it, which pins the name so the shell stops changing it. Turn
   the row off in Settings if you want the height back.
+- **One setup step, offered once.** The shell hooks ship inside the app, and if the line is not in
+  your `~/.zshrc` or fish config the app says so on first launch and offers to write it, because a
+  documented setup step is one almost everyone skips and almost nobody debugs. Say no and it never
+  asks again.
+- **`⌘/` lists every shortcut**, built from the same registry the palette and the key map read, so
+  a key that exists and a key that is documented cannot drift apart. **`⌘⇧A`** takes you to the next
+  pane that wants you, running, waiting or failed, wherever it is.
+- **Commit what you accepted.** The Changes tab stages, unstages, discards, and commits what is
+  staged, with a message and nothing else: no amend, no push. Reading what an agent changed and
+  then accepting it is one thought, and leaving for another window to finish it is the seam this
+  is meant to close. Everything past that is still a conversation for the pane below.
 - **Closing asks, and says what it is closing.** `⌘W` names the pane it is about to close, or
   the tab when that pane was its last, or Marlin when that tab was your last, and each dialog
   lists what is still running in it. Closing a tab from its × or its menu asks the same way.
@@ -93,7 +106,10 @@ Without the hook you get a working terminal with no dots, which is degraded rath
   and `⌘S`, and a write is refused if the file changed on disk since you opened it. That is
   for the typo you spotted while reading. It is a textarea, not Neovim, and it is not trying
   to become Neovim.
-- **Commit.** Stage, unstage and discard are in the sidebar. You are already in a terminal.
+- **Be a git client.** Staging, discarding and committing what you just read are in the sidebar,
+  because they are the end of reading. Merging, rebasing, pushing and pulling are not: they are
+  conversations with a remote that fail in ways needing a paragraph of output, and you are already
+  in a terminal that prints it.
 - **Phone home.** No telemetry of any kind.
 
 ## Not done yet

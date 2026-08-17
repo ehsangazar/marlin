@@ -15,8 +15,11 @@ version carries everything else.
   asks first and then asks again with git's own words if the branch is not fully merged. Remote
   branches are listed separately and check out as a local branch that tracks them, with a Fetch
   button so that list is not stale. Clicking any branch shows what it has that yours does not,
-  three-dot, and clicking a file there opens its diff in the tab. The change count opens the
-  same list for what is uncommitted. Branches come from `.git/HEAD`, read as a file, so a folder
+  three-dot, and clicking a file there opens its diff in the tab. The change count gives the
+  sidebar a tab of its own next to Explorer, listing that repository's changed files with the
+  usual stage, unstage and discard on each row; the strip appears only once something other
+  than the explorer is open. Reviewing a few files means moving between them and coming back to
+  the list, which a modal cannot do. Branches come from `.git/HEAD`, read as a file, so a folder
   of repositories costs no subprocesses to label; counts are a real `git status` each, run in
   parallel and then cached until an explicit refresh.
 - A **Refresh** button on the explorer header. Nothing in the sidebar polls, deliberately, so a
@@ -36,6 +39,26 @@ version carries everything else.
   pane, which pins the name so the shell stops changing it. The bar is also the drag handle,
   replacing the grip that only appeared on hover. `pane_titles = false` under `[layout]`, or
   the Settings toggle, gives the row back to the terminal.
+
+- **The one setup step is now offered rather than documented.** If the shell integration line is
+  missing from your `~/.zshrc` or fish config, a bar appears once with the exact line and a button
+  that appends it. Status dots are a headline feature that silently did nothing until a step
+  everyone skips was taken, which made it the app's largest gap between what it does and what a
+  new user sees it do.
+- **`⌘/` shows every shortcut**, generated from the registry the palette and key map already
+  share. **`⌘⇧A`** focuses the next pane that is running, waiting or failed, across tabs: four
+  agents in four panes was the case that made a dot without a way to reach it a hunt.
+- **Commit from the Changes tab**: a message, the staged files, and nothing else. No amend, no
+  push. Reading what an agent changed and accepting it is one thought, and the app previously
+  ended that thought one verb early.
+
+### Changed
+- Source control is now the second tab of the sidebar rather than a section under the explorer,
+  so changed files are listed in one place instead of two.
+- Closing a pane only asks when something is running, waiting or unsaved in it. A confirmation on
+  every idle pane is how a dialog becomes a key you press without reading, which is the state the
+  tab and quit dialogs must never be in.
+- A new tab or split starts in the working directory of the pane you were in, rather than at home.
 
 ### Removed
 - The **Repositories** panel above the explorer. Every repository folder in the tree now carries

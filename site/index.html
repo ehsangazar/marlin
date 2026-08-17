@@ -9,6 +9,13 @@
 <meta property="og:description" content="The terminal where you read what your agents did. Native, open source, no account, no telemetry.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://marlin.gazar.dev">
+<meta property="og:image" content="https://marlin.gazar.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Marlin">
+<meta name="twitter:description" content="The terminal where you read what your agents did. Native, open source, no account, no telemetry.">
+<meta name="twitter:image" content="https://marlin.gazar.dev/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230A0F16'/%3E%3Ctext x='50' y='68' font-size='58' font-family='monospace' font-weight='700' fill='%234C8DFF' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E">
 <style>
   :root{
@@ -259,8 +266,50 @@
                background:var(--chrome);color:var(--fg);border:1px solid var(--line);cursor:pointer}
   .dctl button:hover{border-color:var(--acc);color:var(--acc)}
 
+  /* The three steps of the loop the whole product is for. Numbered, because it
+     is a sequence rather than a feature list. */
+  .loop{list-style:none;counter-reset:l;margin:1.6rem 0 0;padding:0;display:grid;gap:.7rem;
+        max-width:78ch}
+  .loop li{counter-increment:l;position:relative;padding-left:2.1rem;color:var(--dim);
+           font-size:1rem;line-height:1.6}
+  .loop li b{color:var(--fg)}
+  .loop li::before{content:counter(l);position:absolute;left:0;top:.1rem;width:1.4rem;height:1.4rem;
+                   border-radius:50%;background:var(--chrome);border:1px solid var(--line);
+                   color:var(--acc);font-family:var(--mono);font-size:.72rem;display:flex;
+                   align-items:center;justify-content:center}
+
+  .dsbtabs{display:flex;gap:2px;padding:4px 4px 0;border-bottom:1px solid var(--d-line)}
+  .dsbtab{padding:.2rem .4rem;border:0;border-radius:4px 4px 0 0;background:none;color:var(--d-dim);
+          font:inherit;font-size:.62rem;cursor:pointer}
+  .dsbtab.on{background:var(--d-chrome);color:var(--d-fg);box-shadow:inset 0 -2px 0 var(--d-acc)}
+  .dbr{margin-left:auto;font-size:.58rem;color:var(--d-dim);background:var(--d-line);
+       border-radius:3px;padding:0 .24rem;white-space:nowrap}
+  .dcnt{font-size:.58rem;color:var(--d-grn);min-width:1rem;text-align:right}
+  .dcnt.dirty{color:var(--d-yel)}
+  .dref{margin-left:auto;font-size:.56rem;color:var(--d-dim);border:1px solid var(--d-line);
+        border-radius:4px;padding:0 .28rem}
+  .dcmt{margin:.4rem .3rem 0;padding:.28rem .4rem;border-top:1px solid var(--d-line);
+        font-size:.6rem;color:var(--d-dim)}
+
   @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
+
+<!-- Analytics for this page only. The app itself sends nothing, and the README
+     says so, so this is deliberately scoped to the marketing site: it is
+     self-hosted OpenPanel on the same box, no third party, no cookie banner's
+     worth of third-party cookies, and it does not ship inside Marlin. -->
+<script src="https://openpanel.gazar.dev/op1.js" defer async></script>
+<script>
+  window.op = window.op || function (...a) { (window.op.q = window.op.q || []).push(a); };
+  window.op('init', {
+    clientId: '18593320-ae69-4eff-a4f5-a893b8fd1d6f',
+    // The self-hosted ingest. Without this the SDK posts to openpanel.dev.
+    apiUrl: 'https://openpanel-api.gazar.dev',
+    trackScreenViews: true,
+    trackOutgoingLinks: true,
+    trackAttributes: true,
+  });
+</script>
 </head>
 <body>
 
@@ -268,6 +317,8 @@
   <span class="mark">Marlin</span>
   <nav>
     <a href="#what">What it does</a>
+    <a href="#keys">Keys</a>
+    <a href="#why">Why not iTerm</a>
     <a href="#security">Security</a>
     <a href="#install">Install</a>
     <a href="#gaps">Not done yet</a>
@@ -282,19 +333,26 @@
   panes, and the real work is reading what they changed. <strong>That part happens here, without
   leaving the terminal.</strong></p>
 
+  <ol class="loop">
+    <li><b>They run.</b> Four agents, four panes, a dot on each one that only appears when it
+      knows something you do not: still running, finished, failed.</li>
+    <li><b>You read.</b> Every repository in the tree shows its branch and how many files it has
+      touched. Click the number and that repository's changed files become a tab of the sidebar.</li>
+    <li><b>You decide.</b> Click a file for its diff, unified or side by side, stage or discard
+      the row, and commit what you accepted. Escape puts your panes back exactly as they were.</li>
+  </ol>
+
   <ul class="facts">
-    <li>Git tree, staging and conflicts</li>
-    <li>Unified and side-by-side diffs</li>
-    <li>Splits that nest</li>
-    <li>No cloud, no account, no telemetry</li>
+    <li>No account, no cloud</li>
+    <li>No telemetry, at all</li>
+    <li>One outbound request a day, and it is listed on this page</li>
     <li>MIT</li>
   </ul>
 
-
   <div class="cta">
-    <a class="btn primary" href="#install">Install</a>
-        <a class="btn" href="https://github.com/ehsangazar/marlin">Source</a>
-    <a class="btn" href="https://github.com/sponsors/ehsangazar">Sponsor</a>
+    <a class="btn primary" href="#dwin">See it work</a>
+    <a class="btn" href="#install">Install</a>
+    <a class="btn" href="https://github.com/ehsangazar/marlin">Source</a>
   </div>
 
   <div class="dwin" id="dwin">
@@ -352,9 +410,14 @@
     <div class="cell"><span class="k">Git</span><h3>Staging, conflicts, diffs</h3>
       <p>Branch, ahead count, merge conflicts, staged and changed, with stage, unstage and discard
       on each row. Diffs render unified or side by side. It runs <em>your</em> git.</p></div>
-    <div class="cell"><span class="k">Workspaces</span><h3>A folder of repos is a folder of repos</h3>
-      <p>A directory holding several repositories shows as repositories rather than pretending to be
-      one project, which is what a working directory usually is.</p></div>
+    <div class="cell"><span class="k">Review</span><h3>Every repo shows its branch and its count</h3>
+      <p>A folder of repositories is what a working directory usually is, so each one in the tree
+      says which branch it is on and how many files it has touched. Click the number and its changed
+      files become a tab of the sidebar: read a diff, stage it, commit what you accepted.</p></div>
+    <div class="cell"><span class="k">Branches</span><h3>Switch without leaving the tree</h3>
+      <p>Click a branch to filter, switch, create, or check out a remote one as a local branch that
+      tracks it. Click any branch to see what it has that yours does not, file by file. Merging and
+      pushing stay in the pane below, where their output can be read.</p></div>
     <div class="cell"><span class="k">Reading</span><h3>Files take over the tab</h3>
       <p>Click a file and you get three columns: tree, file, terminal. Escape puts your exact layout
       back. Syntax highlighting across 30 languages, and files are editable.</p></div>
@@ -371,9 +434,69 @@
       <p>Drag a pane to an edge to move it there, to the middle to swap, to a tab to send it. Your
       tabs, splits and directories are restored on the next launch, and a moved pane keeps the shell
       it was already running.</p></div>
+    <div class="cell"><span class="k">Care</span><h3>Nothing closes silently</h3>
+      <p>⌘W names what it is about to close, the pane, the tab, or Marlin, and lists what is still
+      running in it. Return answers the focused button, which is Cancel. ⌘+ and ⌘- scale the whole
+      interface, terminals included, and the level is a line in your config file.</p></div>
     <div class="cell"><span class="k">Editing</span><h3>Click a file and type</h3>
       <p>Files open ready to edit, highlighted while you type, with a gutter and ⌘S. A write is
       refused if the file changed on disk since you opened it.</p></div>
+  </div>
+</section>
+
+<section id="keys" class="wrap">
+  <div class="head"><h2>The whole key map</h2><span class="note">⌘/ shows this inside the app</span></div>
+  <div class="tblwrap">
+  <table class="sectbl plain">
+    <tbody>
+      <tr><th scope="row">⌘D · ⌘⇧D</th><td>Split vertically, split horizontally</td></tr>
+      <tr><th scope="row">⌘W</th><td>Close the pane, or the tab when it was its last, asking first</td></tr>
+      <tr><th scope="row">⌘T · ⌘1–9</th><td>New tab, go to tab</td></tr>
+      <tr><th scope="row">⌃⇥ · ⌘] · ⌘[</th><td>Cycle tabs</td></tr>
+      <tr><th scope="row">⌘⇧A</th><td>Focus the next pane that wants you: running, waiting or failed</td></tr>
+      <tr><th scope="row">⌘⇧P · ⌘P · ⌘⇧F</th><td>Command palette, go to file, search every file</td></tr>
+      <tr><th scope="row">⌘B · ⌘⇧B</th><td>Toggle the sidebar, cycle the tab bar</td></tr>
+      <tr><th scope="row">F2 · ⇧F2</th><td>Rename the pane, rename the tab</td></tr>
+      <tr><th scope="row">⌘⇧↩</th><td>Zoom one pane to the whole tab</td></tr>
+      <tr><th scope="row">⌘F · ⌘K</th><td>Find in scrollback, clear the buffer</td></tr>
+      <tr><th scope="row">⌘+ · ⌘- · ⌘0</th><td>Scale the whole interface, and back to 100%</td></tr>
+      <tr><th scope="row">⌘E · ⌘S · Esc</th><td>Edit the open file, save it, put your panes back</td></tr>
+      <tr><th scope="row">⌘, · ⌘/</th><td>Settings, this table</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="why" class="wrap">
+  <div class="head"><h2>Why not the terminal you already have</h2><span class="note">The honest version</span></div>
+  <p>Every one of these is a good program, and three of them are faster at being a terminal than
+  Marlin is today. The question is what happens after the agent stops printing.</p>
+
+  <div class="tblwrap">
+  <table>
+    <thead><tr><th>Instead of</th><th>What you would miss here</th><th>What you would give up</th></tr></thead>
+    <tbody>
+      <tr><td><b>iTerm2</b></td>
+        <td>Reading the change: git status, diffs and staging in the window, and a per-pane dot
+            that says which agent needs you.</td>
+        <td>Fifteen years of features. Profiles, triggers, tmux integration, shell autocomplete:
+            Marlin has none of them.</td></tr>
+      <tr><td><b>Ghostty or Alacritty</b></td>
+        <td>The same. They are terminal emulators, deliberately, and the review half of the loop
+            happens in another window.</td>
+        <td>Speed that has been measured. Marlin's renderer is unmeasured and this page will not
+            claim otherwise.</td></tr>
+      <tr><td><b>Warp</b></td>
+        <td>Nothing you would notice at first; Warp is the closest thing to this idea.</td>
+        <td>An account, a cloud, AI in the loop and closed source. Marlin has no backend at all,
+            and the trade runs the other way: no team features, no shared blocks.</td></tr>
+      <tr><td><b>The terminal in your editor</b></td>
+        <td>Panes that are a first-class layout rather than a drawer, and a review view that does
+            not fight the editor for the window.</td>
+        <td>Your extensions, your language servers, your debugger. Marlin's editor is a textarea
+            and says so.</td></tr>
+    </tbody>
+  </table>
   </div>
 </section>
 
@@ -406,25 +529,57 @@
   would pick if we were you.</p>
 </section>
 
+<section id="gaps" class="wrap">
+  <div class="head"><h2>Not done yet</h2><span class="note">Kept honest in both directions</span></div>
+  <ul class="gaps">
+    <li><b>Keystroke-to-pixel is still unmeasured.</b> There are now real numbers for the part Rust
+      owns, reproducible in one command, and none at all for VT parsing, the grid and the renderer.
+      That last part is the one you feel, so this page still claims no speed.</li>
+    <li><b>The numbers are one laptop.</b> Nothing tracks them over time and nothing fails when they
+      regress.</li>
+    <li><b>Builds are unsigned</b>, so macOS will complain about an unidentified developer.</li>
+    <li><b>The cross-platform pipeline has never run.</b> Both workflows were written on 16 August
+      and no push or tag has been through either, so "tested on three platforms" is a file on a disk
+      until 0.1.2 proves otherwise. Nobody has sat in front of Marlin on Windows, and Linux is
+      compiled but never packaged.</li>
+    <li><b>A restored session is a layout, not a session.</b> Tabs, splits and directories come back.
+      Scrollback and what was running do not, and faking that would be worse than an empty prompt in
+      the right place.</li>
+    <li><b>The editor is a textarea.</b> Highlighting, a gutter and a save that refuses if the file
+      moved under you, but no multiple cursors and no highlighting above 400KB.</li>
+  </ul>
+  <p style="margin-top:1.3rem;font-size:.86rem;color:var(--dim)">Eleven items that used to be on this
+  list have been built and were taken off it, most recently session restore, panes you can move, and
+  the measurement harness that rewrote the first two lines above. A stale gap list flatters you
+  exactly as much as no gap list at all.</p>
+</section>
+
 <section id="install" class="wrap">
   <div class="head"><h2>Install</h2><span class="note">macOS and Windows</span></div>
-  <p>From <a href="https://github.com/ehsangazar/marlin/releases">Releases</a>. Everything up to
-  and including 0.1.1 was built by hand on one Apple silicon Mac, so the only artefact that exists
-  today is an <code>aarch64</code> disk image. The table below is what 0.1.2 will ship, off build
-  machines that are not the author's.</p>
+  <p><strong>What exists to download today</strong> is one file: an <code>aarch64</code> disk
+  image on the <a href="https://github.com/ehsangazar/marlin/releases">releases page</a>, version
+  0.1.1, built by hand on one Apple silicon Mac. If you are on an Intel Mac, on Windows, or on
+  Linux, the honest answer right now is to build it from source, which takes one command and is
+  written out below.</p>
 
   <div class="tblwrap" style="border-color:var(--line);background:rgba(255,255,255,.015)">
     <table class="sectbl plain">
-    <thead><tr><th scope="col">You are on</th><th scope="col">What to take</th></tr></thead>
+    <thead><tr><th scope="col">You are on</th><th scope="col">Today</th><th scope="col">In 0.1.2</th></tr></thead>
     <tbody>
-      <tr><th scope="row">macOS, Apple silicon or Intel</th>
-        <td>One universal disk image, both architectures in the same file.</td></tr>
+      <tr><th scope="row">macOS, Apple silicon</th>
+        <td>The <code>aarch64</code> disk image on the releases page.</td>
+        <td>One universal image, both architectures in the same file.</td></tr>
+      <tr><th scope="row">macOS, Intel</th>
+        <td>Build from source.</td>
+        <td>The same universal image.</td></tr>
       <tr><th scope="row">Windows 10 or 11, x64</th>
-        <td>The <code>-setup.exe</code> installer. It installs for the current user, so there is no
-        admin prompt. An <code>.msi</code> is attached to the same release for anyone deploying it.</td></tr>
+        <td>Build from source.</td>
+        <td>A <code>-setup.exe</code> that installs for the current user with no admin prompt, and
+        an <code>.msi</code> for anyone deploying it.</td></tr>
       <tr><th scope="row">Linux</th>
-        <td>No package yet. It compiles and its tests run on every push, but nothing is built for
-        you to download, so it is a build from source or nothing.</td></tr>
+        <td>Build from source.</td>
+        <td>Still build from source. It compiles and its tests run on every push, but nothing is
+        packaged for you to download.</td></tr>
     </tbody>
   </table></div>
 
@@ -470,31 +625,6 @@
   </div>
 </section>
 
-<section id="gaps" class="wrap">
-  <div class="head"><h2>Not done yet</h2><span class="note">Kept honest in both directions</span></div>
-  <ul class="gaps">
-    <li><b>Keystroke-to-pixel is still unmeasured.</b> There are now real numbers for the part Rust
-      owns, reproducible in one command, and none at all for VT parsing, the grid and the renderer.
-      That last part is the one you feel, so this page still claims no speed.</li>
-    <li><b>The numbers are one laptop.</b> Nothing tracks them over time and nothing fails when they
-      regress.</li>
-    <li><b>Builds are unsigned</b>, so macOS will complain about an unidentified developer.</li>
-    <li><b>The cross-platform pipeline has never run.</b> Both workflows were written on 16 August
-      and no push or tag has been through either, so "tested on three platforms" is a file on a disk
-      until 0.1.2 proves otherwise. Nobody has sat in front of Marlin on Windows, and Linux is
-      compiled but never packaged.</li>
-    <li><b>A restored session is a layout, not a session.</b> Tabs, splits and directories come back.
-      Scrollback and what was running do not, and faking that would be worse than an empty prompt in
-      the right place.</li>
-    <li><b>The editor is a textarea.</b> Highlighting, a gutter and a save that refuses if the file
-      moved under you, but no multiple cursors and no highlighting above 400KB.</li>
-  </ul>
-  <p style="margin-top:1.3rem;font-size:.86rem;color:var(--dim)">Eleven items that used to be on this
-  list have been built and were taken off it, most recently session restore, panes you can move, and
-  the measurement harness that rewrote the first two lines above. A stale gap list flatters you
-  exactly as much as no gap list at all.</p>
-</section>
-
 <section class="wrap">
   <div class="head"><h2>Something broken?</h2><span class="note">Issues get picked up</span></div>
   <p>Open an issue with what you did and what happened. Agents triage every issue, reproduce what
@@ -527,7 +657,9 @@
     ["Tokyo Night",{bg:"#161721",bar:"#12131B",chrome:"#0F1017",line:"#3B4261",fg:"#D5DCF7",dim:"#7E88B8",acc:"#8DB0F9",vio:"#C7AAF9",grn:"#AEDA7C",yel:"#EBBC7A",red:"#FF8A9F",cyn:"#93D9FF"}],
     ["Catppuccin Latte",{bg:"#FFFFFF",bar:"#E9ECF2",chrome:"#DEE2EA",line:"#BCC0CC",fg:"#363950",dim:"#6B6E82",acc:"#0F52E0",vio:"#7526E0",grn:"#2F8A1F",yel:"#B0700F",red:"#C00A2F",cyn:"#0E7C74"}]
   ];
-  var REPOS = ["beacon-api","driftwood","keel-ui","lantern","meridian","sonar-cli"];
+  // name, branch, changed-file count. A tick where there is nothing to read.
+  var REPOS = [["beacon-api","main",4],["driftwood","main",0],["keel-ui","feat/grid",2],
+               ["lantern","main",0],["meridian","main",7],["sonar-cli","dev",0]];
   var FILES = [
     ["Cargo.toml","toml","<span class='da'>[dependencies]</span>\naxum = <span class='dg'>\"0.8\"</span>\ntokio = <span class='dg'>\"1\"</span>\nserde = <span class='dg'>\"1\"</span>"],
     ["main.rs","rs","<span class='dv'>fn</span> <span class='da'>main</span>() {\n    beacon::<span class='da'>serve</span>(<span class='dg'>\"0.0.0.0:8080\"</span>)\n}"],
@@ -561,7 +693,8 @@
     ];
   }
 
-  var st = { tabs: freshTabs(), active: 0, focus: null, bar: "h", theme: 0, sel: "", stash: null };
+  var st = { tabs: freshTabs(), active: 0, focus: null, bar: "h", theme: 0, sel: "", stash: null,
+             panel: "explorer" };
   st.focus = leaves(st.tabs[0].root)[0].pane.id;
 
   var el = {};
@@ -627,29 +760,63 @@
     return b;
   }
 
+  // The sidebar's own tabs: Explorer, and the changes of whatever repository you
+  // clicked a count on. Mirrors the app, where source control stopped being a
+  // section stapled under the tree.
+  function sidebarTabs() {
+    var bar = document.createElement("div");
+    bar.className = "dsbtabs";
+    [["Explorer", "explorer"], ["Changes 1", "changes"]].forEach(function (t) {
+      var b = document.createElement("button");
+      b.className = "dsbtab" + (st.panel === t[1] ? " on" : "");
+      b.textContent = t[0];
+      b.onclick = function () { st.panel = t[1]; draw(); };
+      bar.appendChild(b);
+    });
+    return bar;
+  }
+
   function drawTree() {
     var t = el["d-tree"];
     t.innerHTML = "";
     var h = document.createElement("div");
     h.className = "dhead";
-    h.innerHTML = '<span>~/Projects/harbour</span><span class="ok2">.claude ✓</span>';
+    h.innerHTML = '<span>~/Projects/harbour</span><span class="dref">Refresh</span>';
     t.appendChild(h);
+    t.appendChild(sidebarTabs());
 
-    var s1 = document.createElement("div"); s1.className = "dsec"; s1.textContent = "Repositories";
-    t.appendChild(s1);
-    REPOS.forEach(function (r) { t.appendChild(row("repo", "⑂", r)); });
+    if (st.panel === "changes") {
+      var bar = document.createElement("div");
+      bar.className = "dsec";
+      bar.innerHTML = '<span>Changes</span>';
+      t.appendChild(bar);
+      t.appendChild(row("", "•", "cache.rs", function () { openDiff(); }, st.sel === "cache.rs"));
+      var c = document.createElement("div");
+      c.className = "dcmt";
+      c.innerHTML = '<span>Commit 1 staged file</span>';
+      t.appendChild(c);
+      return;
+    }
 
-    var s2 = document.createElement("div"); s2.className = "dsec"; s2.textContent = "Explorer";
-    t.appendChild(s2);
+    // A repository in the tree wears its branch and how many files it has
+    // touched, and both are things you click.
+    REPOS.forEach(function (r) {
+      var b = document.createElement("button");
+      b.className = "drow repo";
+      b.innerHTML = '<span class="di">⑂</span><span>' + r[0] + '</span>' +
+                    '<span class="dbr">' + r[1] + '</span>' +
+                    '<span class="dcnt' + (r[2] ? " dirty" : "") + '">' + (r[2] || "✓") + '</span>';
+      b.onclick = function () {
+        if (!r[2]) { toast("Nothing uncommitted in " + r[0] + "."); return; }
+        st.panel = "changes"; draw();
+      };
+      t.appendChild(b);
+    });
     t.appendChild(row("dir", "▪", "src"));
     t.appendChild(row("dir", "▪", "migrations"));
     FILES.forEach(function (f) {
       t.appendChild(row("", "•", f[0], function () { openFile(f); }, st.sel === f[0]));
     });
-
-    var s3 = document.createElement("div"); s3.className = "dsec"; s3.textContent = "Source control · 1";
-    t.appendChild(s3);
-    t.appendChild(row("", "•", "cache.rs", function () { openDiff(); }, st.sel === "cache.rs"));
   }
 
   function nodeEl(n) {
