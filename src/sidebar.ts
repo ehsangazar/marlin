@@ -85,7 +85,20 @@ export class Sidebar {
    *  of ordinary folders is re-asked about on every expand and collapse, since
    *  only the answers get cached and "no" is an answer. */
   private notRepo = new Set<string>();
-  private scOpen = true;
+  /**
+   * The sidebar's own tabs. The explorer is the first one and is always there;
+   * clicking a repository's change count opens another beside it, showing only
+   * that repository's changed files. Reviewing a handful of files means moving
+   * between them and coming back to the list, so the list has to be a place you
+   * can leave and return to rather than a box that closes on the first click.
+   */
+  private panels: { cwd: string; name: string; status: GitStatus | null }[] = [];
+  /** Which one is showing: -1 the explorer, -2 the changes of the repository the
+   *  focused shell is standing in, 0 and up a repository opened from the tree.
+   *  Source control used to be a section stapled to the bottom of the explorer,
+   *  which meant changed files were listed in two places at once. */
+  private panel = -1;
+  private CURRENT = -2;
   private status: GitStatus | null = null;
   private project: Project | null = null;
   private selected = "";
@@ -116,6 +129,11 @@ export class Sidebar {
       this.heads.clear();
       this.counts.clear();
       this.notRepo.clear();
+      // The open panels are lists of what is uncommitted, which is exactly the
+      // thing a refresh exists to re-read.
+      for (const p of this.panels) {
+        p.status = await invoke<GitStatus>("git_status", { cwd: p.cwd }).catch(() => null);
+      }
     } catch {
       this.project = null;
       this.status = null;
@@ -125,6 +143,37 @@ export class Sidebar {
 
   select(path: string): void {
     this.selected = path;
+  }
+
+  /** Open the changes for a repository, or show the one already open for it.
+   *  Clicking the same count twice is a way back to that list, not a second
+   *  copy of it. */
+  async openChanges(cwd: string, name: string): Promise<void> {
+    const at = this.panels.findIndex((p) => p.cwd === cwd);
+    if (at >= 0) {
+      this.panel = at;
+      await this.render();
+      return;
+    }
+    this.panels.push({ cwd, name, status: null });
+    this.panel = this.panels.length - 1;
+    await this.render();
+    await this.loadPanel(this.panel);
+  }
+
+  private async closePanel(i: number): Promise<void> {
+    this.panels.splice(i, 1);
+    // Back to the explorer rather than to whichever panel slid into the gap:
+    // closing a list means you are done with it, not that you want another.
+    if (this.panel >= this.panels.length || this.panel === i) this.panel = -1;
+    await this.render();
+  }
+
+  private async loadPanel(i: number): Promise<void> {
+    const p = this.panels[i];
+    if (!p) return;
+    p.status = await invoke<GitStatus>("git_status", { cwd: p.cwd }).catch(() => null);
+    await this.render();
   }
 
   /**
@@ -138,10 +187,10 @@ export class Sidebar {
     b.className = c.conflicts ? "cchip conf" : c.changes ? "cchip dirty" : "cchip clean";
     b.textContent = c.conflicts ? `!${c.conflicts}` : c.changes ? String(c.changes) : "✓";
     b.title = c.conflicts
-      ? `${c.conflicts} conflicted. Click to list them.`
+      ? `${c.conflicts} conflicted. Click to open a tab for reading them.`
       : c.changes
-        ? `${c.changes} changed. Click to list them.`
-        : "Clean. Click to check.";
+        ? `${c.changes} changed. Click to open a tab for reading them.`
+        : "Clean. Click to open a tab and check.";
     b.addEventListener("click", (e) => {
       e.stopPropagation();
       this.h.openChanges(repo, name);
@@ -340,8 +389,8 @@ export class Sidebar {
     }
   }
 
-  private gitRow(f: GitFile, staged: boolean): HTMLElement {
-    const cwd = this.cwd;
+  private gitRow(f: GitFile, staged: boolean, repo?: string): HTMLElement {
+    const cwd = repo ?? this.cwd;
     const acts: HTMLElement[] = [];
     const mk = (id: "stage" | "unstage" | "discard", glyph: string, tip: string, danger = false) => {
       const a = document.createElement("span");
@@ -380,6 +429,168 @@ export class Sidebar {
     });
   }
 
+  /** The strip that switches the sidebar between its own tabs. Hidden entirely
+   *  when the explorer is the only one, because a single tab is not a choice. */
+  private tabs(): HTMLElement | null {
+    const bar = document.createElement("div");
+    bar.className = "sbtabs";
+
+    const tab = (label: string, on: boolean, pick: () => void, shut?: () => void): void => {
+      const b = document.createElement("button");
+      b.className = `sbtab${on ? " on" : ""}`;
+      b.textContent = label;
+      b.title = label;
+      b.addEventListener("click", pick);
+      if (shut) {
+        const x = document.createElement("span");
+        x.className = "x";
+        x.textContent = "×";
+        x.title = `Close ${label}`;
+        x.addEventListener("click", (e) => {
+          e.stopPropagation();
+          shut();
+        });
+        b.appendChild(x);
+      }
+      bar.appendChild(b);
+    };
+
+    tab("Explorer", this.panel === -1, () => {
+      this.panel = -1;
+      void this.render();
+    });
+    if (this.status?.is_repo) {
+      const n =
+        this.status.conflicts.length + this.status.staged.length + this.status.changes.length;
+      tab(`Changes${n ? ` ${n}` : ""}`, this.panel === this.CURRENT, () => {
+        this.panel = this.CURRENT;
+        void this.render();
+      });
+    }
+    for (const [i, p] of this.panels.entries()) {
+      const n = p.status
+        ? p.status.conflicts.length + p.status.staged.length + p.status.changes.length
+        : 0;
+      tab(
+        `${p.name}${n ? ` ${n}` : ""}`,
+        this.panel === i,
+        () => {
+          this.panel = i;
+          void this.render();
+        },
+        () => void this.closePanel(i),
+      );
+    }
+    return bar;
+  }
+
+  /** One repository's uncommitted files, as its own tab of the sidebar. */
+  private changesPanel(frag: HTMLElement): void {
+    const p =
+      this.panel === this.CURRENT
+        ? { cwd: this.cwd, name: base(this.cwd), status: this.status }
+        : this.panels[this.panel];
+    if (!p) return;
+    const st = p.status;
+
+    const bar = document.createElement("div");
+    bar.className = "scbar";
+    const ic = document.createElement("span");
+    ic.className = "ic";
+    ic.textContent = "⑂";
+    const bn = st?.branch
+      ? this.branchChip(p.cwd, p.name, st.branch)
+      : document.createElement("span");
+    if (!st?.branch) bn.textContent = "detached";
+    const ab = document.createElement("span");
+    ab.className = "ab";
+    ab.textContent = [st?.ahead ? `↑${st.ahead}` : "", st?.behind ? `↓${st.behind}` : ""]
+      .filter(Boolean)
+      .join(" ");
+    bar.append(ic, bn, ab);
+    frag.appendChild(bar);
+
+    if (!st) {
+      const l = document.createElement("div");
+      l.className = "sgh";
+      l.textContent = "reading…";
+      frag.appendChild(l);
+      return;
+    }
+
+    const total = st.conflicts.length + st.staged.length + st.changes.length;
+    const group = (label: string, files: GitFile[], staged: boolean, cls = "") => {
+      if (!files.length) return;
+      const h = document.createElement("div");
+      h.className = `sgh ${cls}`;
+      const t = document.createElement("span");
+      t.textContent = label;
+      const n = document.createElement("span");
+      n.className = "n";
+      n.textContent = String(files.length);
+      h.append(t, n);
+      frag.appendChild(h);
+      for (const f of files) frag.appendChild(this.gitRow(f, staged, p.cwd));
+    };
+    group("Merge conflicts", st.conflicts, false, "conf");
+    group("Staged changes", st.staged, true);
+    group("Changes", st.changes, false);
+
+    if (!total) {
+      const e = document.createElement("div");
+      e.className = "sgh";
+      e.textContent = "working tree clean";
+      frag.appendChild(e);
+      return;
+    }
+
+    // Reading what an agent changed and then accepting it is one thought, and
+    // leaving for a shell to type the second half of it is the seam this app is
+    // meant to close. Staged only, no amend, no push: everything past "record
+    // what I just read" is still a conversation for the pane below.
+    if (!st.staged.length) return;
+    const box = document.createElement("div");
+    box.className = "cmt";
+    const msg = document.createElement("input");
+    msg.type = "text";
+    msg.spellcheck = false;
+    msg.placeholder = `Commit ${st.staged.length} staged ${st.staged.length === 1 ? "file" : "files"}`;
+    const go = document.createElement("button");
+    go.className = "askbtn primary";
+    go.textContent = "Commit";
+    const say = document.createElement("div");
+    say.className = "cmtnote";
+
+    const run = async (): Promise<void> => {
+      const message = msg.value.trim();
+      if (!message) {
+        say.textContent = "A commit needs a message.";
+        return;
+      }
+      go.disabled = true;
+      say.textContent = "committing…";
+      try {
+        await invoke<string>("git_commit", { cwd: p.cwd, message });
+        msg.value = "";
+        say.textContent = "";
+        await this.refresh();
+      } catch (e) {
+        // Git's own refusal, which names the hook or the empty index.
+        say.textContent = String(e);
+        go.disabled = false;
+      }
+    };
+    msg.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      void run();
+    });
+    go.addEventListener("click", () => void run());
+    box.append(msg, go);
+    frag.append(box, say);
+  }
+
   async render(): Promise<void> {
     const frag = document.createElement("div");
 
@@ -416,6 +627,17 @@ export class Sidebar {
     head.appendChild(refresh);
     frag.appendChild(head);
 
+    const strip = this.tabs();
+    if (strip) frag.appendChild(strip);
+
+    // One tab or the other, never both: the changes list is the whole reason
+    // that tab exists, and the explorer is one click away in the strip above.
+    if (this.panel >= 0) {
+      this.changesPanel(frag);
+      this.el.replaceChildren(...Array.from(frag.children));
+      return;
+    }
+
     frag.appendChild(
       this.section("Explorer", this.explorerOpen, null, () => {
         this.explorerOpen = !this.explorerOpen;
@@ -423,60 +645,6 @@ export class Sidebar {
       }),
     );
     if (this.explorerOpen) await this.tree(this.cwd, 0, frag);
-
-    const st = this.status;
-    if (st?.is_repo) {
-      const total = st.conflicts.length + st.staged.length + st.changes.length;
-      frag.appendChild(
-        this.section("Source Control", this.scOpen, total, () => {
-          this.scOpen = !this.scOpen;
-          void this.render();
-        }),
-      );
-      if (this.scOpen) {
-        const bar = document.createElement("div");
-        bar.className = "scbar";
-        const ic = document.createElement("span");
-        ic.className = "ic";
-        ic.textContent = "⑂";
-        const bn = st.branch
-          ? this.branchChip(this.cwd, base(this.cwd), st.branch)
-          : document.createElement("span");
-        if (!st.branch) bn.textContent = "detached";
-        const ab = document.createElement("span");
-        ab.className = "ab";
-        ab.textContent = [st.ahead ? `↑${st.ahead}` : "", st.behind ? `↓${st.behind}` : ""]
-          .filter(Boolean)
-          .join(" ");
-        bar.append(ic, bn, ab);
-        frag.appendChild(bar);
-
-        const group = (label: string, files: GitFile[], staged: boolean, cls = "") => {
-          if (!files.length) return;
-          const h = document.createElement("div");
-          h.className = `sgh ${cls}`;
-          const t = document.createElement("span");
-          t.textContent = label;
-          const n = document.createElement("span");
-          n.className = "n";
-          n.textContent = String(files.length);
-          h.append(t, n);
-          frag.appendChild(h);
-          for (const f of files) frag.appendChild(this.gitRow(f, staged));
-        };
-
-        group("Merge conflicts", st.conflicts, false, "conf");
-        group("Staged changes", st.staged, true);
-        group("Changes", st.changes, false);
-
-        if (!total) {
-          const e = document.createElement("div");
-          e.className = "sgh";
-          e.textContent = "working tree clean";
-          frag.appendChild(e);
-        }
-      }
-    }
 
     this.el.replaceChildren(...Array.from(frag.children));
   }

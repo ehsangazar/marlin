@@ -25,7 +25,6 @@ import { Find } from "./find";
 import { menu } from "./menu";
 import { ask, confirm } from "./prompt";
 import { openBranches } from "./branches";
-import { openChanges } from "./changes";
 import { Reporter } from "./report";
 import { notifier } from "./notify";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -1545,24 +1544,7 @@ async function boot(): Promise<void> {
         // list and every count in the sidebar at once.
         onChanged: () => void sidebar.refresh(),
       }),
-    openChanges: (repo, name) =>
-      void openChanges({
-        cwd: repo,
-        name,
-        openDiff: (cwd, path, file, staged) =>
-          openViewer(
-            new Viewer({
-              kind: "diff",
-              name: file,
-              path,
-              cwd,
-              staged,
-              mode: app.diffMode,
-              onMode: (m) => (app.diffMode = m),
-              onClose: () => closeViewer(),
-            }),
-          ),
-      }),
+    openChanges: (repo, name) => void sidebar.openChanges(repo, name),
     gitAction: async (action, cwd, path) => {
       const cmd = action === "stage" ? "git_stage" : action === "unstage" ? "git_unstage" : "git_discard";
       try {
