@@ -102,11 +102,23 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
                                               left:-1px; width:3px; }
 body.resizing { cursor:col-resize; user-select:none; }
 body.resizing .xterm { pointer-events:none; }
+/* A pane being dragged passes over terminals, which would otherwise treat the
+   sweep as a text selection and swallow the mouseup that ends the drag. */
+body.dragging { cursor:grabbing; user-select:none; }
+body.dragging .xterm { pointer-events:none; }
 .treehead { display:flex; align-items:center; gap:.4rem; padding:.42rem .6rem;
             font-size:.62rem; color:var(--m-dim); letter-spacing:.06em;
             border-bottom:1px solid var(--m-line); margin-bottom:4px;
             position:sticky; top:0; background:var(--m-bar); }
-.treehead .ok2 { color:var(--m-vio); margin-left:auto; white-space:nowrap; }
+.treehead .ok2 { color:var(--m-vio); white-space:nowrap; }
+/* The spacer, not an auto margin on each: two auto margins share the free space
+   between them and leave the badge stranded in the middle of the header. */
+.treehead .thsp { flex:1; }
+.treehead .thbtn { background:none; border:1px solid var(--m-line); border-radius:5px;
+                   color:var(--m-dim); font:inherit; font-size:.58rem; letter-spacing:.06em;
+                   padding:.08rem .4rem; cursor:pointer; white-space:nowrap; }
+.treehead .thbtn:hover:not(:disabled) { color:var(--m-fg); border-color:var(--m-acc); }
+.treehead .thbtn:disabled { opacity:.55; cursor:default; }
 
 .tsec { font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; color:var(--m-dim);
         padding:.5rem .6rem .25rem; display:flex; align-items:center; gap:.35rem; cursor:pointer; }
@@ -279,6 +291,11 @@ body.resizing .xterm { pointer-events:none; }
 /* Drag and drop */
 .tab.drag { opacity:.35; }
 .tab.over { box-shadow:inset 2px 0 0 var(--m-vio); }
+/* The marker sits on the edge the tab would arrive at, so it has to follow the
+   bar's direction, and the far end of the row needs an edge of its own. */
+.tab.overend { box-shadow:inset -2px 0 0 var(--m-vio); }
+.body.v .tab.over { box-shadow:inset 0 2px 0 var(--m-vio); }
+.body.v .tab.overend { box-shadow:inset 0 -2px 0 var(--m-vio); }
 .pane-term.dragover { outline:2px dashed var(--m-vio); outline-offset:-3px; }
 
 /* A tab needs to be keyboard-reachable without wearing the browser's focus

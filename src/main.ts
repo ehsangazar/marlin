@@ -66,8 +66,6 @@ let sidebar: Sidebar;
 let palette: Palette;
 let settings: Settings;
 let find: Find;
-let dragTab: number | null = null;
-let dragPane: Surface | null = null;
 let reporter: Reporter;
 let cfg: Config = { ...DEFAULTS };
 
@@ -121,6 +119,101 @@ function refreshChrome(): void {
   const tab = app.tabs[app.active];
   els.stPanes.textContent = tab ? String(leaves(tab.root).length) : "0";
   renderTabs();
+}
+
+/**
+ * Reordering tabs, done with plain mouse events rather than HTML5 drag and drop.
+ *
+ * The page cannot use HTML5 drag and drop at all. Tauri claims the whole
+ * WKWebView as an OS drag destination so that files dragged in from Finder reach
+ * `wireFileDrop`, and its handler reports every drag as handled, so WebKit's own
+ * drop handling never runs and no `dragover` or `drop` event is dispatched to
+ * the page. A drag that starts inside the window is an OS drag too, so it is
+ * swallowed the same way. `dragstart` still fires, which is why the code this
+ * replaces looked correct and did nothing at all.
+ *
+ * Mouse events are untouched by any of that.
+ */
+const DRAG_SLOP = 4;
+let tabDrag: { tab: Tab; x: number; y: number; live: boolean } | null = null;
+/** A reorder ends on a mouseup, and a mouseup is also half of a click. Without
+ *  this the click that follows would select whichever tab the pointer landed
+ *  on, on top of the move it just made. */
+let tabDragDone = false;
+
+const tabNodes = (): HTMLElement[] => [...els.tabbar.children] as HTMLElement[];
+
+/** Released off the bar means the drag was abandoned, not that the tab should go
+ *  to the end. Dropping in the empty space after the last tab is still on the
+ *  bar, and still means the end. */
+function onBar(x: number, y: number): boolean {
+  const r = els.tabbar.getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+
+/** Which slot the dragged tab would land in, read against the order currently
+ *  on screen, which still contains the tab being dragged. */
+function dropSlot(x: number, y: number): number {
+  const down = app.bar === "v";
+  const nodes = tabNodes();
+  for (const [i, n] of nodes.entries()) {
+    const r = n.getBoundingClientRect();
+    const mid = down ? r.top + r.height / 2 : r.left + r.width / 2;
+    if ((down ? y : x) < mid) return i;
+  }
+  return nodes.length;
+}
+
+function markSlot(at: number): void {
+  const nodes = tabNodes();
+  for (const [i, n] of nodes.entries()) {
+    n.classList.toggle("over", i === at);
+    n.classList.toggle("overend", at === nodes.length && i === nodes.length - 1);
+  }
+}
+
+function onTabDragMove(e: MouseEvent): void {
+  if (!tabDrag) return;
+  if (!tabDrag.live) {
+    // A few pixels of slop, or every click on a tab would be a one-pixel
+    // reorder that lands where it started and re-renders for nothing.
+    if (
+      Math.abs(e.clientX - tabDrag.x) < DRAG_SLOP &&
+      Math.abs(e.clientY - tabDrag.y) < DRAG_SLOP
+    )
+      return;
+    tabDrag.live = true;
+    tabNodes()[app.tabs.indexOf(tabDrag.tab)]?.classList.add("drag");
+  }
+  markSlot(onBar(e.clientX, e.clientY) ? dropSlot(e.clientX, e.clientY) : -1);
+}
+
+function onTabDragEnd(e: MouseEvent): void {
+  const drag = tabDrag;
+  tabDrag = null;
+  window.removeEventListener("mousemove", onTabDragMove, true);
+  window.removeEventListener("mouseup", onTabDragEnd, true);
+  if (!drag?.live) return;
+
+  tabDragDone = true;
+  setTimeout(() => (tabDragDone = false), 0);
+
+  if (!onBar(e.clientX, e.clientY)) {
+    renderTabs();
+    return;
+  }
+
+  const from = app.tabs.indexOf(drag.tab);
+  let to = dropSlot(e.clientX, e.clientY);
+  // The slot was read while the dragged tab was still in the list, so every
+  // slot after it is one too far once it has been taken out.
+  if (to > from) to -= 1;
+  if (from < 0 || to === from) {
+    renderTabs();
+    return;
+  }
+  app.tabs.splice(to, 0, ...app.tabs.splice(from, 1));
+  selectTab(app.tabs.indexOf(drag.tab));
 }
 
 function renderTabs(): void {
@@ -189,49 +282,21 @@ function renderTabs(): void {
       ]);
     });
 
-    // Drag to reorder. The click handler re-renders, so the node under the
-    // pointer must survive between mousedown and drop: reorder state lives in
-    // the closure, not in the DOM.
-    b.draggable = true;
-    b.addEventListener("dragstart", (e) => {
-      dragTab = i;
-      b.classList.add("drag");
-      e.dataTransfer?.setData("text/plain", String(i));
+    // Drag to reorder. The tab is held as itself rather than as its index: the
+    // bar is rebuilt on every render, so by the time the drag ends the index it
+    // started at may belong to a different tab.
+    b.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 || e.detail !== 1) return;
+      // The close button is a button, not a handle.
+      if ((e.target as HTMLElement).closest(".x")) return;
+      tabDrag = { tab: t, x: e.clientX, y: e.clientY, live: false };
+      window.addEventListener("mousemove", onTabDragMove, true);
+      window.addEventListener("mouseup", onTabDragEnd, true);
     });
-    b.addEventListener("dragend", () => {
-      dragTab = null;
-      b.classList.remove("drag");
-    });
-    b.addEventListener("dragover", (e) => {
-      // The tab bar takes two kinds of drag: a tab being reordered, and a pane
-      // being sent to another tab.
-      if (dragPane) {
-        if (i === app.active) return;
-        e.preventDefault();
-        b.classList.add("dragtarget");
-        return;
-      }
-      if (dragTab === null || dragTab === i) return;
-      e.preventDefault();
-      b.classList.add("over");
-    });
-    b.addEventListener("dragleave", () => b.classList.remove("over", "dragtarget"));
-    b.addEventListener("drop", (e) => {
-      e.preventDefault();
-      b.classList.remove("over", "dragtarget");
-      if (dragPane) {
-        const moving = dragPane;
-        dragPane = null;
-        movePaneToTab(moving, i);
-        return;
-      }
-      if (dragTab === null || dragTab === i) return;
-      const moved = app.tabs.splice(dragTab, 1)[0];
-      if (moved) app.tabs.splice(i, 0, moved);
-      dragTab = null;
-      app.active = i;
-      selectTab(i);
-    });
+
+    // A pane dropped onto a tab is sent to that tab. The pointer finds this
+    // element on the way past, in `onPaneDragMove`, so there is nothing to
+    // listen for here.
     return b;
   });
   els.tabbar.replaceChildren(...nodes);
@@ -327,6 +392,86 @@ function clearZone(el: HTMLElement): void {
 function clearZones(): void {
   for (const p of allPanes()) clearZone(p.el);
   for (const el of els.tabbar.querySelectorAll(".dragtarget")) el.classList.remove("dragtarget");
+}
+
+/**
+ * Dragging a pane by its title bar, on mouse events for the same reason tabs
+ * are: HTML5 drag and drop cannot work in this window at all. Tauri claims the
+ * WKWebView as an OS drag destination so Finder drops reach `wireFileDrop`, and
+ * reports every drag as handled, so WebKit never dispatches `dragover` or
+ * `drop` to the page. This was written against that API and had never once
+ * moved a pane.
+ *
+ * The pointer decides the target on the way past rather than the target
+ * listening for it: one drag, one place that knows what is under the cursor.
+ */
+let paneDrag: { pane: Surface; x: number; y: number; live: boolean } | null = null;
+
+/** The tab under the pointer, or -1. A pane dropped on a tab goes to it. */
+function tabIndexAt(x: number, y: number): number {
+  const el = document.elementFromPoint(x, y)?.closest(".tab");
+  if (!el) return -1;
+  return [...els.tabbar.children].indexOf(el);
+}
+
+/** The pane under the pointer, ignoring the one being dragged. */
+function paneElAt(x: number, y: number, not: Surface): Surface | null {
+  const el = document.elementFromPoint(x, y)?.closest(".pane-term");
+  if (!el) return null;
+  const hit = leaves(curTab().root)
+    .map((l) => l.pane)
+    .find((p) => p.el === el);
+  return hit && hit !== not ? hit : null;
+}
+
+function onPaneDragMove(e: MouseEvent): void {
+  if (!paneDrag) return;
+  if (!paneDrag.live) {
+    if (
+      Math.abs(e.clientX - paneDrag.x) < DRAG_SLOP &&
+      Math.abs(e.clientY - paneDrag.y) < DRAG_SLOP
+    )
+      return;
+    paneDrag.live = true;
+    paneDrag.pane.el.classList.add("drag");
+    // A drag across a terminal would otherwise select its text on the way.
+    document.body.classList.add("dragging");
+  }
+
+  clearZones();
+  const tabAt = tabIndexAt(e.clientX, e.clientY);
+  if (tabAt >= 0) {
+    if (tabAt !== app.active) els.tabbar.children[tabAt]?.classList.add("dragtarget");
+    return;
+  }
+  const over = paneElAt(e.clientX, e.clientY, paneDrag.pane);
+  if (!over) return;
+  const zone = zoneAt(over.el, e.clientX, e.clientY);
+  over.el.classList.add("dragover");
+  over.el.classList.add(`zone-${zone}`);
+}
+
+function onPaneDragEnd(e: MouseEvent): void {
+  const drag = paneDrag;
+  paneDrag = null;
+  window.removeEventListener("mousemove", onPaneDragMove, true);
+  window.removeEventListener("mouseup", onPaneDragEnd, true);
+  if (!drag) return;
+  drag.pane.el.classList.remove("drag");
+  document.body.classList.remove("dragging");
+  clearZones();
+  if (!drag.live) return;
+
+  const tabAt = tabIndexAt(e.clientX, e.clientY);
+  if (tabAt >= 0) {
+    if (tabAt !== app.active) movePaneToTab(drag.pane, tabAt);
+    return;
+  }
+  const over = paneElAt(e.clientX, e.clientY, drag.pane);
+  if (!over) return;
+  const zone = zoneAt(over.el, e.clientX, e.clientY);
+  if (zone === "swap") swapPanes(drag.pane, over);
+  else movePane(drag.pane, over, zone);
 }
 
 /** Two panes trade places inside their leaves; the tree does not change. */
@@ -425,44 +570,24 @@ async function makePane(): Promise<Pane> {
   // would eat text selection, which is the most-used gesture in a terminal.
   const grip = pane.head;
   grip.title = "Double-click to rename. Drag to an edge to move it there, or to the middle to swap.";
-  grip.draggable = true;
-  grip.addEventListener("dblclick", (e) => {
-    // The pane is already focused: the mousedown above got there first.
+  // `dblclick` never arrives on a draggable element in WebKit: the drag
+  // machinery claims the second press, so the rename gesture the tooltip
+  // promises silently did nothing. `detail === 2` is that same second click seen
+  // one event earlier, before the drag has had it.
+  //
+  // The pane is already focused by then: the first click's mousedown got there.
+  grip.addEventListener("mousedown", (e) => {
+    if (e.detail !== 2) return;
     e.preventDefault();
     void renameFocused(false);
   });
-  grip.addEventListener("dragstart", (e) => {
-    dragPane = pane;
-    e.dataTransfer?.setData("text/plain", "pane");
-    e.dataTransfer!.effectAllowed = "move";
-    pane.el.classList.add("drag");
-  });
-  grip.addEventListener("dragend", () => {
-    dragPane = null;
-    pane.el.classList.remove("drag");
-    clearZones();
-  });
-  pane.el.addEventListener("dragover", (e) => {
-    if (!dragPane || dragPane === pane) return;
+  grip.addEventListener("mousedown", (e) => {
+    // `detail === 2` is the rename, handled above.
+    if (e.button !== 0 || e.detail !== 1) return;
     e.preventDefault();
-    const zone = zoneAt(pane.el, e.clientX, e.clientY);
-    pane.el.classList.add("dragover");
-    for (const z of ZONES) pane.el.classList.toggle(`zone-${z}`, z === zone);
-  });
-  pane.el.addEventListener("dragleave", (e) => {
-    // Crossing onto a child element fires dragleave on the parent, which would
-    // strobe the overlay off and on for the whole drag.
-    if (pane.el.contains(e.relatedTarget as globalThis.Node | null)) return;
-    clearZone(pane.el);
-  });
-  pane.el.addEventListener("drop", (e) => {
-    e.preventDefault();
-    const zone = zoneAt(pane.el, e.clientX, e.clientY);
-    clearZone(pane.el);
-    if (!dragPane || dragPane === pane) return;
-    if (zone === "swap") swapPanes(dragPane, pane);
-    else movePane(dragPane, pane, zone);
-    dragPane = null;
+    paneDrag = { pane, x: e.clientX, y: e.clientY, live: false };
+    window.addEventListener("mousemove", onPaneDragMove, true);
+    window.addEventListener("mouseup", onPaneDragEnd, true);
   });
   pane.el.addEventListener("contextmenu", (e) => {
     e.preventDefault();
