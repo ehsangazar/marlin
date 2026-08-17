@@ -49,6 +49,10 @@ export class Viewer {
   private path: string;
   private cwd: string;
   private staged: boolean;
+  /** Set when this diff is a branch against HEAD rather than the working tree.
+   *  A viewer with a rev is read-only by nature: there is no file on disk to
+   *  save it back to. */
+  private rev: string;
   private body = document.createElement("div");
   private head = document.createElement("div");
   private mode: DiffMode;
@@ -70,6 +74,7 @@ export class Viewer {
     path: string;
     cwd?: string;
     staged?: boolean;
+    rev?: string;
     mode?: DiffMode;
     onMode?: (m: DiffMode) => void;
     onClose?: () => void;
@@ -79,6 +84,7 @@ export class Viewer {
     this.path = opts.path;
     this.cwd = opts.cwd ?? "";
     this.staged = opts.staged ?? false;
+    this.rev = opts.rev ?? "";
     this.mode = opts.mode ?? "unified";
     this.onMode = opts.onMode;
     this.onClose = opts.onClose;
@@ -134,7 +140,13 @@ export class Viewer {
     badge.className = `vbadge${this.editing ? " editing" : ""}`;
     badge.textContent =
       this.kind === "diff"
-        ? "diff"
+        ? // Which diff this is, since a branch diff and a working-tree diff look
+          // identical once they are rendered and mean very different things.
+          this.rev
+          ? `${this.rev} vs HEAD`
+          : this.staged
+            ? "staged diff"
+            : "diff"
         : !this.editing
           ? "read-only"
           : this.original.length > HL_LIMIT
@@ -241,11 +253,17 @@ export class Viewer {
         this.dirty = false;
         this.renderFile(doc.content);
       } else {
-        const raw = await invoke<string>("git_diff", {
-          cwd: this.cwd,
-          path: this.path,
-          staged: this.staged,
-        });
+        const raw = this.rev
+          ? await invoke<string>("git_rev_diff", {
+              cwd: this.cwd,
+              rev: this.rev,
+              path: this.path,
+            })
+          : await invoke<string>("git_diff", {
+              cwd: this.cwd,
+              path: this.path,
+              staged: this.staged,
+            });
         this.renderDiff(parseDiff(raw));
       }
       this.renderHead();

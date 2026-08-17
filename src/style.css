@@ -458,17 +458,77 @@ body.dragging .xterm { pointer-events:none; }
 .askbtn:hover { border-color:var(--m-acc); }
 .askbtn.primary { background:var(--m-acc); border-color:var(--m-acc); color:#06101F; font-weight:600; }
 .askbtn.primary.danger { background:var(--m-red); border-color:var(--m-red); }
+/* A destructive action that is not the primary one still has to read as
+   destructive, or the only red thing in a row is the button you meant to avoid. */
+.askbtn.danger:not(.primary) { color:var(--m-red); }
+.askbtn.danger:not(.primary):hover { border-color:var(--m-red); }
 .askbtn:focus-visible { outline:2px solid var(--m-acc); outline-offset:2px; }
+/* The shortcut rides on the button, dimmer than the label: it is what the
+   button is called by the keyboard, not a second thing to read. */
+.askkey { margin-left:.45rem; font-size:.62rem; opacity:.6; }
+.askbtn.primary .askkey { opacity:.75; }
 
 /* Workspace repo rows: branch, ahead/behind, and a change count that is a
    number when it matters and a tick when it does not. */
-.trow .br { font-size:.6rem; color:var(--m-dim); background:var(--m-line); border-radius:3px;
+.trow .br, .scbar .br { font:inherit; font-size:.6rem; color:var(--m-dim);
+            background:var(--m-line); border:1px solid transparent; border-radius:3px;
             padding:0 .28rem; flex:0 0 auto; max-width:96px; overflow:hidden;
-            text-overflow:ellipsis; white-space:nowrap; margin-left:auto; }
+            text-overflow:ellipsis; white-space:nowrap; margin-left:auto; cursor:pointer; }
+/* The branch is the control, so it has to look like one on approach. */
+.trow .br:hover, .scbar .br:hover { color:var(--m-fg); border-color:var(--m-vio); }
+.scbar .br { margin-left:0; max-width:none; }
 .trow .ab { font-size:.58rem; color:var(--m-cyn); flex:0 0 auto; }
+/* The change count, next to the branch and clickable like it. */
+.trow .cchip { font:inherit; font-size:.6rem; background:none; border:1px solid transparent;
+               border-radius:3px; padding:0 .22rem; flex:0 0 auto; cursor:pointer;
+               min-width:1.1rem; text-align:right; }
+.trow .cchip.dirty { color:var(--m-yel); }
+.trow .cchip.conf { color:var(--m-red); }
+.trow .cchip.clean { color:var(--m-grn); opacity:.75; }
+.trow .cchip:hover { border-color:currentColor; }
 .trow .dirty { font-size:.6rem; color:var(--m-yel); flex:0 0 auto; min-width:14px; text-align:right; }
 .trow .dirty.conf { color:var(--m-red); }
 .trow .clean { font-size:.6rem; color:var(--m-grn); flex:0 0 auto; min-width:14px; text-align:right; }
 .tsec .shint { margin-left:.5rem; font-size:.55rem; color:var(--m-dim); opacity:.75;
                text-transform:none; letter-spacing:0; }
 .tsec .cnt+.shint { margin-left:.4rem; }
+
+/* The branch switcher. It reuses the modal shell, and is wider than a rename
+   box because a branch line is a name, a date and a commit subject. */
+.askbox.branches { width:min(620px,94%); max-height:min(72vh,620px); display:flex;
+                   flex-direction:column; gap:.5rem; }
+/* Wider, because a change list is a path and a path is long. */
+.askbox.branches.wide { width:min(820px,96%); }
+.brhead { margin:0; display:flex; align-items:center; gap:.5rem; }
+.brhead .askbtn { margin-left:auto; font-size:.62rem; padding:.16rem .5rem; }
+/* Remote refs are a second list, not a second colour: they are checked out
+   rather than switched to, and the divider is what says so. */
+.brdiv { font-size:.58rem; letter-spacing:.09em; text-transform:uppercase;
+         color:var(--m-dim); padding:.5rem .3rem .2rem; border-top:1px solid var(--m-line);
+         margin-top:.3rem; }
+.brbody { display:flex; flex-direction:column; gap:.45rem; min-height:0; }
+.brrows { overflow-y:auto; display:flex; flex-direction:column; gap:2px; min-height:0;
+          max-height:46vh; }
+.brow { display:flex; align-items:center; gap:.5rem; border-radius:5px; padding:.1rem .2rem; }
+.brow.on { background:var(--m-chrome); }
+/* Where the arrow keys are. Distinct from `.on`, which is the branch you are
+   standing on: those are two different facts and both can be true at once. */
+.brow.sel { background:var(--m-chrome); box-shadow:inset 2px 0 0 var(--m-acc); }
+.brow:hover { background:var(--m-chrome); }
+.brmain { flex:1 1 auto; min-width:0; display:flex; align-items:baseline; gap:.5rem;
+          background:none; border:0; color:inherit; font:inherit; text-align:left;
+          padding:.24rem .3rem; cursor:pointer; border-radius:5px; }
+.brow.file { width:100%; background:none; border:0; color:inherit; font:inherit;
+             text-align:left; cursor:pointer; padding:.24rem .3rem; }
+.brname { color:var(--m-fg); font-size:.76rem; white-space:nowrap; }
+.brmeta { color:var(--m-dim); font-size:.62rem; overflow:hidden; text-overflow:ellipsis;
+          white-space:nowrap; min-width:0; }
+.bracts { display:flex; gap:.3rem; flex:0 0 auto; }
+.bracts .askbtn { font-size:.62rem; padding:.16rem .5rem; }
+.brhere { font-size:.6rem; color:var(--m-vio); padding:0 .3rem; }
+.brbar { display:flex; gap:.35rem; flex-wrap:wrap; }
+.brbar .askbtn { font-size:.64rem; padding:.2rem .55rem; }
+.brempty { color:var(--m-dim); font-size:.66rem; padding:.3rem .3rem; }
+.brnote { font-size:.62rem; color:var(--m-dim); white-space:pre-wrap; max-height:6rem;
+          overflow-y:auto; }
+.brnote.bad { color:var(--m-red); }

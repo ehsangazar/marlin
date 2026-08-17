@@ -145,11 +145,6 @@ fn git_status(cwd: String) -> Result<git::GitStatus, String> {
 }
 
 #[tauri::command]
-fn git_workspace(root: String) -> Vec<git::RepoStatus> {
-    git::workspace(&root)
-}
-
-#[tauri::command]
 fn git_diff(cwd: String, path: String, staged: bool) -> Result<String, String> {
     git::diff(&cwd, &path, staged).map_err(|e| e.to_string())
 }
@@ -167,6 +162,56 @@ fn git_unstage(cwd: String, path: String) -> Result<(), String> {
 #[tauri::command]
 fn git_discard(cwd: String, path: String) -> Result<(), String> {
     git::discard(&cwd, &path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_branches(cwd: String) -> Result<Vec<git::Branch>, String> {
+    git::branches(&cwd).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_checkout(cwd: String, branch: String) -> Result<(), String> {
+    git::checkout(&cwd, &branch).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_checkout_remote(cwd: String, rev: String) -> Result<(), String> {
+    git::checkout_remote(&cwd, &rev).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_fetch(cwd: String) -> Result<(), String> {
+    git::fetch(&cwd).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_branch_create(cwd: String, name: String) -> Result<(), String> {
+    git::create_branch(&cwd, &name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_branch_delete(cwd: String, branch: String, force: bool) -> Result<(), String> {
+    git::delete_branch(&cwd, &branch, force).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_branch_files(cwd: String, rev: String) -> Result<Vec<git::GitFile>, String> {
+    git::branch_files(&cwd, &rev).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_rev_diff(cwd: String, rev: String, path: String) -> Result<String, String> {
+    git::rev_diff(&cwd, &rev, &path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_heads(paths: Vec<String>) -> Vec<git::Head> {
+    git::heads(paths)
+}
+
+#[tauri::command]
+fn git_counts(paths: Vec<String>) -> Vec<git::Counts> {
+    git::counts(paths)
 }
 
 #[tauri::command]
@@ -245,11 +290,20 @@ pub fn run() {
             fs_home,
             fs_display,
             git_status,
-            git_workspace,
             git_diff,
             git_stage,
             git_unstage,
-            git_discard
+            git_discard,
+            git_branches,
+            git_checkout,
+            git_checkout_remote,
+            git_fetch,
+            git_branch_create,
+            git_branch_delete,
+            git_branch_files,
+            git_rev_diff,
+            git_heads,
+            git_counts
         ])
         .build(tauri::generate_context!())
         .expect("marlin failed to start")

@@ -24,6 +24,8 @@ import { load as loadSession, save as saveSession, rebuild as rebuildSession } f
 import { Find } from "./find";
 import { menu } from "./menu";
 import { ask, confirm } from "./prompt";
+import { openBranches } from "./branches";
+import { openChanges } from "./changes";
 import { Reporter } from "./report";
 import { notifier } from "./notify";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -1475,6 +1477,47 @@ async function boot(): Promise<void> {
         }),
       ),
     terminalHere: (dir) => void openTerminalIn(dir),
+    openBranches: (repo, name) =>
+      void openBranches({
+        cwd: repo,
+        name,
+        // A branch diff opens where a working-tree diff opens: in the tab, with
+        // the same viewer, the same unified and side-by-side, the same Escape.
+        openDiff: (cwd, rev, path, file) =>
+          openViewer(
+            new Viewer({
+              kind: "diff",
+              name: file,
+              path,
+              cwd,
+              rev,
+              mode: app.diffMode,
+              onMode: (m) => (app.diffMode = m),
+              onClose: () => closeViewer(),
+            }),
+          ),
+        // Switching or deleting a branch changes the branch name, the file
+        // list and every count in the sidebar at once.
+        onChanged: () => void sidebar.refresh(),
+      }),
+    openChanges: (repo, name) =>
+      void openChanges({
+        cwd: repo,
+        name,
+        openDiff: (cwd, path, file, staged) =>
+          openViewer(
+            new Viewer({
+              kind: "diff",
+              name: file,
+              path,
+              cwd,
+              staged,
+              mode: app.diffMode,
+              onMode: (m) => (app.diffMode = m),
+              onClose: () => closeViewer(),
+            }),
+          ),
+      }),
     gitAction: async (action, cwd, path) => {
       const cmd = action === "stage" ? "git_stage" : action === "unstage" ? "git_unstage" : "git_discard";
       try {
