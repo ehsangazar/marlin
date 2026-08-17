@@ -2,13 +2,14 @@ mod config;
 mod fs;
 mod log;
 mod git;
+mod menu;
 // Public only so `src/bin/measure.rs` can measure the chunking on the hot path
 // without a copy of it that could drift from the real one.
 pub mod pty;
 mod update;
 
 use pty::Shared;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 fn fs_list(path: String) -> Result<Vec<fs::Entry>, String> {
@@ -203,6 +204,13 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .menu(menu::build)
+        // The menu decides nothing. It names the intent and hands it to the
+        // window, which is the only place that knows how many panes are open or
+        // what is still running in them.
+        .on_menu_event(|app, event| {
+            let _ = app.emit(menu::EVENT, event.id().0.as_str());
+        })
         .setup(|app| {
             app.manage(Shared::default());
             Ok(())

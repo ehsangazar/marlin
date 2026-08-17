@@ -1138,16 +1138,20 @@ function handleShortcut(e: KeyboardEvent): boolean {
     void doSplit(e.shiftKey ? "col" : "row");
     return false;
   }
-  if (k === "w") {
-    closeFocused();
-    return false;
-  }
-  if (k === "q") {
-    void confirmQuit("You pressed ⌘Q.");
-    return false;
-  }
+  // ⌘W and ⌘Q belong to the menu, and only to the menu. A WKWebView dispatches
+  // the keystroke to the page and then still lets AppKit match the menu's key
+  // equivalent, so handling them here as well ran each of them twice: two
+  // dialogs, the second asking about a pane that the first had already closed.
+  // The key is still swallowed here so it never reaches the shell.
+  if (k === "w" || k === "q") return false;
   if (k === "t") {
     void newTab();
+    return false;
+  }
+    return false;
+  }
+    return false;
+  }
     return false;
   }
   if (k === ",") {
@@ -1558,6 +1562,15 @@ async function boot(): Promise<void> {
   document.getElementById("lnk-sponsor")?.addEventListener("click", () =>
     openExternal("https://github.com/sponsors/ehsangazar"),
   );
+
+  // ⌘W and ⌘Q are menu key equivalents on macOS, which AppKit matches before the
+  // keystroke reaches the webview, so the key map below never runs for them. The
+  // menu forwards them here instead of acting itself, and they land on exactly
+  // the same functions the palette and the key map call.
+  void listen<string>("menu", (e) => {
+    if (e.payload === "close-pane") void closeFocused();
+    else if (e.payload === "quit") void confirmQuit("You chose Quit.");
+  });
 
   // The red button and the menu's Quit arrive here too, so there is one
   // confirmation rather than one per entry point.
