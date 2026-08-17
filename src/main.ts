@@ -1150,10 +1150,19 @@ function handleShortcut(e: KeyboardEvent): boolean {
     void newTab();
     return false;
   }
+  // ⌘+ arrives as "=" unshifted and "+" shifted, and both mean the same thing
+  // to the hand that pressed them. ⌘0 is the way back, which every browser and
+  // editor already taught everyone.
+  if (k === "=" || k === "+") {
+    zoomBy(ZOOM_STEP);
     return false;
   }
+  if (k === "-" || k === "_") {
+    zoomBy(-ZOOM_STEP);
     return false;
   }
+  if (k === "0") {
+    setZoom(1);
     return false;
   }
   if (k === ",") {
@@ -1336,7 +1345,9 @@ function wireTreeResize(): void {
       els.treegrip.removeEventListener("pointercancel", up);
       els.treegrip.classList.remove("on");
       document.body.classList.remove("resizing");
-      const w = parseInt(els.main.style.getPropertyValue("--tree-w"), 10);
+      // Back out of the zoom before storing, or a drag at 150% would write a
+      // width that grows again by half the next time the config is applied.
+      const w = Math.round(parseInt(els.main.style.getPropertyValue("--tree-w"), 10) / clampZoom(cfg.zoom));
       if (Number.isFinite(w) && w !== cfg.treeWidth) {
         cfg = { ...cfg, treeWidth: w };
         settings.sync(cfg);
@@ -1357,12 +1368,44 @@ function wireTreeResize(): void {
   });
 }
 
+/**
+ * Zoom, in the sense the rest of the desktop means it: everything gets bigger.
+ *
+ * The chrome scales through the root font size, which every rem in the
+ * stylesheet is measured against, so padding, radii and text move together
+ * rather than the text growing inside boxes that stay put. Terminals are not
+ * rem-based, so their font size is multiplied here instead. The two have to be
+ * one setting: a terminal that scales while the tab bar does not is exactly
+ * what makes an app look broken at 150%.
+ */
+const ZOOM_MIN = 0.7;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
+/** What one rem is at life size, and what every rem in the stylesheet assumes. */
+const ROOT_PX = 16;
+
+const clampZoom = (z: number): number =>
+  Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((Number.isFinite(z) ? z : 1) * 100) / 100));
+
+function setZoom(z: number): void {
+  const next = clampZoom(z);
+  if (next === clampZoom(cfg.zoom)) return;
+  applyConfig({ ...cfg, zoom: next });
+  void saveConfig(cfg);
+}
+
+const zoomBy = (delta: number): void => setZoom(clampZoom(cfg.zoom) + delta);
+
 function applyConfig(next: Config): void {
   cfg = next;
+  const zoom = clampZoom(cfg.zoom);
+  document.documentElement.style.fontSize = `${ROOT_PX * zoom}px`;
   setTheme(themeByName(cfg.theme));
   for (const p of allPanes()) {
     p.term.options.fontFamily = cfg.fontFamily;
-    p.term.options.fontSize = cfg.fontSize;
+    // Rounded, because xterm measures a cell from the rendered glyph and a
+    // fractional size gives a fractional cell that the grid then fights.
+    p.term.options.fontSize = Math.max(6, Math.round(cfg.fontSize * zoom));
     p.term.options.cursorStyle = cfg.cursorStyle;
     p.term.options.cursorBlink = cfg.cursorBlink;
     p.term.options.scrollback = cfg.scrollback;
@@ -1370,7 +1413,9 @@ function applyConfig(next: Config): void {
   els.panes.classList.toggle("noheads", !cfg.paneTitles);
   app.tree = cfg.fileTree;
   els.main.classList.toggle("notree", !app.tree);
-  setTreeWidth(cfg.treeWidth);
+  // The stored width is a width at 100%, so the tree grows with everything else
+  // rather than staying a fixed strip of pixels beside larger text.
+  setTreeWidth(cfg.treeWidth * zoom);
   app.bar = cfg.tabBar === "top" ? "h" : cfg.tabBar === "side" ? "v" : "hidden";
   applyBar();
   app.diffMode = cfg.diffView;
@@ -1542,11 +1587,14 @@ async function boot(): Promise<void> {
     // nor any menu, so the only way to find it was to already know it.
     { label: "Next Tab", key: "⌃⇥", run: () => cycleTab(1) },
     { label: "Previous Tab", key: "⌃⇧⇥", run: () => cycleTab(-1) },
-    { label: "Close Pane", key: "⌘W", run: closeFocused },
+    { label: "Close Pane", key: "⌘W", run: () => void closeFocused() },
     { label: "Rename Pane", key: "F2", run: () => void renameFocused(false) },
     { label: "Rename Tab", key: "⇧F2", run: () => void renameFocused(true) },
     { label: "Go to File", key: "⌘P", run: () => palette.open("file") },
     { label: "Search in Files", key: "⌘⇧F", run: () => palette.open("text") },
+    { label: "Zoom In", key: "⌘+", run: () => zoomBy(ZOOM_STEP) },
+    { label: "Zoom Out", key: "⌘-", run: () => zoomBy(-ZOOM_STEP) },
+    { label: "Reset Zoom", key: "⌘0", run: () => setZoom(1) },
     { label: "Toggle File Tree", key: "⌘B", run: toggleTree },
     { label: "Cycle Tab Bar Position", key: "⌘⇧B", run: cycleBar },
     { label: "Refresh Source Control", run: () => void sidebar.refresh() },

@@ -4,6 +4,9 @@ export interface Config {
   theme: string;
   fontFamily: string;
   fontSize: number;
+  /** Everything, scaled at once: chrome by the root font size, terminals by
+   *  multiplying the font size above. 1 is life size. */
+  zoom: number;
   cursorStyle: "block" | "bar" | "underline";
   cursorBlink: boolean;
 
@@ -24,6 +27,7 @@ export const DEFAULTS: Config = {
   theme: "Marlin Dark",
   fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
   fontSize: 13,
+  zoom: 1,
   cursorStyle: "block",
   // Off by default. A blinking cursor repaints forever, and "idle costs
   // nothing" is the claim this project is built on.
@@ -53,7 +57,7 @@ export const DEFAULTS: Config = {
  * pulling a parser into the bundle for eleven keys.
  */
 const SECTIONS: Record<string, (keyof Config)[]> = {
-  appearance: ["theme", "fontFamily", "fontSize", "cursorStyle", "cursorBlink"],
+  appearance: ["theme", "fontFamily", "fontSize", "zoom", "cursorStyle", "cursorBlink"],
   layout: ["tabBar", "paneTitles", "fileTree", "treeWidth", "diffView"],
   terminal: ["shell", "scrollback", "copyOnSelect", "rightClickPaste"],
   notifications: ["notifications"],
@@ -63,6 +67,7 @@ const SNAKE: Record<string, keyof Config> = {
   theme: "theme",
   font_family: "fontFamily",
   font_size: "fontSize",
+  zoom: "zoom",
   cursor_style: "cursorStyle",
   cursor_blink: "cursorBlink",
   tab_bar: "tabBar",

@@ -269,6 +269,15 @@ export class Settings {
     body.appendChild(this.row("Font size", null, this.num(c.fontSize, 8, 32, 1, (v) => this.commit({ fontSize: v }))));
     body.appendChild(
       this.row(
+        "Zoom",
+        "per cent, everything at once: ⌘+ and ⌘−, ⌘0 back to 100",
+        this.num(Math.round((c.zoom || 1) * 100), 70, 200, 10, (v) =>
+          this.commit({ zoom: v / 100 }),
+        ),
+      ),
+    );
+    body.appendChild(
+      this.row(
         "Cursor",
         null,
         this.seg(c.cursorStyle, [["block", "Block"], ["bar", "Bar"], ["underline", "Underline"]], (v) =>

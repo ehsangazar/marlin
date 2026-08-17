@@ -11,9 +11,9 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .win { display:flex; flex-direction:column; height:100%; }
 
 .titlebar {
-  display:flex; align-items:center; gap:.5rem; flex:0 0 34px;
+  display:flex; align-items:center; gap:.5rem; flex:0 0 2.125rem;
   background:var(--m-chrome); border-bottom:1px solid var(--m-line);
-  padding-left:78px; /* clear of the macOS traffic lights */
+  padding-left:78px; /* fixed: the traffic lights are a macOS size, not ours */
   user-select:none;
 }
 .titlebar .name { color:var(--m-dim); font-size:.72rem; letter-spacing:.04em; }
@@ -33,7 +33,7 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 .pane-term .xterm-viewport::-webkit-scrollbar { width:0; height:0; display:none; }
 
 .statusbar {
-  display:flex; gap:1.1rem; flex:0 0 24px; align-items:center;
+  display:flex; gap:1.1rem; flex:0 0 1.5rem; align-items:center;
   padding:0 .8rem; background:var(--m-chrome); border-top:1px solid var(--m-line);
   font-size:.66rem; color:var(--m-dim); letter-spacing:.03em;
 }
@@ -58,7 +58,7 @@ body { font-family: var(--mono); color: var(--m-fg); -webkit-font-smoothing: ant
 
 .tabbar { display:flex; gap:2px; background:var(--m-bar); }
 .body.h .tabbar { flex-direction:row; padding:4px 4px 0; border-bottom:1px solid var(--m-line); overflow-x:auto; }
-.body.v .tabbar { flex-direction:column; padding:4px; border-right:1px solid var(--m-line); width:186px; flex:0 0 186px; }
+.body.v .tabbar { flex-direction:column; padding:4px; border-right:1px solid var(--m-line); width:11.625rem; flex:0 0 11.625rem; }
 
 .tab {
   display:flex; align-items:center; gap:.4rem; padding:.34rem .4rem .34rem .55rem;
@@ -131,8 +131,8 @@ body.dragging .xterm { pointer-events:none; }
 .trow:hover { background:var(--m-chrome); color:var(--m-fg); }
 .trow.sel { background:var(--m-chrome); color:var(--m-fg); box-shadow:inset 2px 0 0 var(--m-acc); }
 .gd { width:.62rem; flex:0 0 auto; align-self:stretch; border-left:1px solid var(--m-line); }
-.tw { width:10px; text-align:center; flex:0 0 auto; font-size:.6rem; opacity:.75; }
-.ic { width:15px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.tw { width:.625rem; text-align:center; flex:0 0 auto; font-size:.6rem; opacity:.75; }
+.ic { width:.94rem; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .trow.dir > .ic { color:var(--m-acc); }
 .trow.repo > .ic { color:var(--m-vio); }
 .ic.cfg { color:var(--m-vio); }
@@ -197,7 +197,7 @@ body.dragging .xterm { pointer-events:none; }
 .palin .pfx { color:var(--m-acc); font-size:.72rem; flex:0 0 auto; }
 .palin input { flex:1; background:none; border:0; outline:none; color:var(--m-fg);
                font:inherit; font-size:.8rem; }
-.palres { max-height:300px; overflow:auto; padding:4px; }
+.palres { max-height:18.75rem; overflow:auto; padding:4px; }
 .pres { display:flex; align-items:baseline; gap:.5rem; padding:.26rem .5rem;
         border-radius:4px; font-size:.72rem; color:var(--m-fg); cursor:pointer; }
 .pres.on, .pres:hover { background:var(--m-acc); color:#06101F; }
@@ -267,14 +267,14 @@ body.dragging .xterm { pointer-events:none; }
         box-shadow:0 12px 30px -14px rgba(0,0,0,.8); }
 .find.on { display:flex; }
 .find input { background:var(--m-bg); border:1px solid var(--m-line); border-radius:4px;
-              color:var(--m-fg); font:inherit; font-size:.72rem; padding:.2rem .4rem; width:190px; outline:none; }
+              color:var(--m-fg); font:inherit; font-size:.72rem; padding:.2rem .4rem; width:11.875rem; outline:none; }
 .find .fcount { font-size:.62rem; color:var(--m-red); min-width:52px; }
 .fbtn { background:none; border:0; color:var(--m-dim); font:inherit; font-size:.75rem;
         padding:.1rem .3rem; border-radius:3px; cursor:pointer; }
 .fbtn:hover { background:var(--m-line); color:var(--m-fg); }
 
 /* Context menu */
-.ctx { position:fixed; z-index:50; min-width:210px; background:var(--m-chrome);
+.ctx { position:fixed; z-index:50; min-width:13.125rem; background:var(--m-chrome);
        border:1px solid var(--m-line); border-radius:7px; padding:4px; display:none;
        box-shadow:0 14px 34px -14px rgba(0,0,0,.85); }
 .ctx.on { display:block; }
@@ -308,7 +308,7 @@ body.dragging .xterm { pointer-events:none; }
 .trow:focus, .tsec:focus { outline: none; }
 
 /* The empty run of the tab bar is a target, so it needs to fill the axis. */
-.body.h .tabbar { min-height:30px; }
+.body.h .tabbar { min-height:1.875rem; }
 .body.v .tabbar { min-height:0; }
 
 /* File viewer: gutter plus highlight.js, themed through the palette so the
