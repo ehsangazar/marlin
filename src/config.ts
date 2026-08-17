@@ -21,6 +21,9 @@ export interface Config {
   copyOnSelect: boolean;
   rightClickPaste: boolean;
   notifications: boolean;
+  /** Turned off once the shell-integration offer has been answered, either way.
+   *  A prompt that comes back after you have said no is not an offer. */
+  shellHint: boolean;
 }
 
 export const DEFAULTS: Config = {
@@ -44,6 +47,7 @@ export const DEFAULTS: Config = {
   copyOnSelect: false,
   rightClickPaste: false,
   notifications: true,
+  shellHint: true,
 };
 
 /**
@@ -61,6 +65,7 @@ const SECTIONS: Record<string, (keyof Config)[]> = {
   layout: ["tabBar", "paneTitles", "fileTree", "treeWidth", "diffView"],
   terminal: ["shell", "scrollback", "copyOnSelect", "rightClickPaste"],
   notifications: ["notifications"],
+  hints: ["shellHint"],
 };
 
 const SNAKE: Record<string, keyof Config> = {
@@ -80,6 +85,7 @@ const SNAKE: Record<string, keyof Config> = {
   copy_on_select: "copyOnSelect",
   right_click_paste: "rightClickPaste",
   notifications: "notifications",
+  shell_hint: "shellHint",
 };
 
 const toSnake = (k: string) => k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);

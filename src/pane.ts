@@ -47,6 +47,10 @@ export class Pane {
   startCwd: string | null = null;
   ptyId: number | null = null;
 
+  /** Shown until the shell has printed something. Typing before the pty exists
+   *  goes nowhere, so a pane that looks ready and is not is a pane that eats a
+   *  command. */
+  private starting: HTMLDivElement | null = null;
   private fit = new FitAddon();
   private ro: ResizeObserver | null = null;
   private fitPending = 0;
@@ -80,7 +84,10 @@ export class Pane {
     this.head.append(this.dot, this.label);
     this.body = document.createElement("div");
     this.body.className = "pbody";
-    this.el.append(this.head, this.body);
+    this.starting = document.createElement("div");
+    this.starting.className = "pstart";
+    this.starting.textContent = "starting shell";
+    this.el.append(this.head, this.body, this.starting);
     this.syncHead();
 
     this.term = new Terminal({
@@ -115,6 +122,17 @@ export class Pane {
     this.label.textContent = this.name;
   }
 
+  /**
+   * The shell has spoken, so the pane is usable. Called on the first byte out of
+   * the pty rather than when `pty_spawn` returns: the process exists a moment
+   * before its prompt does, and the prompt is what a person waits for.
+   */
+  ready(): void {
+    if (!this.starting) return;
+    this.starting.remove();
+    this.starting = null;
+  }
+
   /** Must run after the element is in the DOM: WebGL needs a real canvas size. */
   async open(): Promise<void> {
     this.term.open(this.body);
@@ -134,6 +152,9 @@ export class Pane {
     this.fit.fit();
 
     if (this.startCwd) this.cwd = this.startCwd;
+    // A shell configured to print no prompt at all is unusual but real, and it
+    // would otherwise sit behind this label forever.
+    setTimeout(() => this.ready(), 3000);
     this.ptyId = await invoke<number>("pty_spawn", {
       rows: this.term.rows,
       cols: this.term.cols,

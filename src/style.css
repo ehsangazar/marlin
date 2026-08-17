@@ -104,6 +104,16 @@ body.resizing { cursor:col-resize; user-select:none; }
 body.resizing .xterm { pointer-events:none; }
 /* A pane being dragged passes over terminals, which would otherwise treat the
    sweep as a text selection and swallow the mouseup that ends the drag. */
+/* The label a pane wears until its shell answers. Placed over the body rather
+   than written into the terminal, because writing it into the terminal would
+   put it in the scrollback of a session that had not started yet. */
+.pstart { position:absolute; inset:auto 0 0 0; top:50%; transform:translateY(-50%);
+          text-align:center; color:var(--m-dim); font-size:.68rem; letter-spacing:.06em;
+          pointer-events:none; }
+.pstart::after { content:"…"; animation:pstart 1.2s steps(4,end) infinite; }
+@keyframes pstart { 0% { content:""; } 25% { content:"."; } 50% { content:".."; }
+                    75% { content:"..."; } }
+
 body.dragging { cursor:grabbing; user-select:none; }
 body.dragging .xterm { pointer-events:none; }
 .treehead { display:flex; align-items:center; gap:.4rem; padding:.42rem .6rem;

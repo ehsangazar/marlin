@@ -69,6 +69,10 @@ let settings: Settings;
 let find: Find;
 let reporter: Reporter;
 let cfg: Config = { ...DEFAULTS };
+/** One registry. The palette, the key map and the shortcut sheet all read it,
+ *  so an action cannot exist in one and be missing from another. Filled in
+ *  `boot`, because most of what it calls does not exist before then. */
+const keymap: Command[] = [];
 
 const curTab = (): Tab => app.tabs[app.active] as Tab;
 /** Terminal panes only. A viewer has no pty and no theme of its own. */
@@ -619,6 +623,7 @@ async function doSplit(dir: "row" | "col"): Promise<void> {
   if (leaves(tab.root).length >= 6) return;
 
   const pane = await makePane();
+  pane.startCwd = currentDir();
   const node = leaf(pane);
   tab.root = replaceNode(tab.root, target, split(dir, leaf(target.pane), node));
   render();
@@ -733,6 +738,13 @@ function paneState(s: Surface): string {
   return "Nothing is running in it.";
 }
 
+/** Something is running in it, waiting on it, or unsaved in it. */
+function paneAtRisk(s: Surface): boolean {
+  if (s instanceof Viewer) return s.isDirty;
+  if (!isTerm(s)) return false;
+  return s.status === "run" || s.status === "wait";
+}
+
 /** Closing one pane out of several. The rest of the tab is untouched. */
 async function confirmClosePane(pane: Surface): Promise<boolean> {
   return confirm({
@@ -801,6 +813,78 @@ async function closeOthersAsked(keep: number): Promise<void> {
   if (i >= 0) closeOthers(i);
 }
 
+/**
+ * The one setup step, offered once, in the place where its absence shows.
+ *
+ * The hooks ship inside the app and the whole of the work is one line in a
+ * config file, but that line is the difference between status dots working and
+ * silently not working. Documented setup steps are skipped by almost everyone
+ * and debugged by almost nobody, so the app checks whether the line is there
+ * and offers to write it. Answering it either way is the end of it: a prompt
+ * that returns after you have declined is not an offer.
+ */
+interface ShellHook {
+  shell: string;
+  rc: string;
+  installed: boolean;
+  line: string;
+}
+
+async function offerShellHook(): Promise<void> {
+  if (!cfg.shellHint) return;
+  const bar = document.getElementById("hintbar");
+  if (!bar) return;
+
+  const hook = await invoke<ShellHook>("shell_hook").catch(() => null);
+  // Nothing to offer for a shell we ship no hook for, and nothing to say when
+  // the line is already there.
+  if (!hook || !hook.shell || hook.installed) return;
+
+  const dismiss = (remember: boolean): void => {
+    bar.hidden = true;
+    if (!remember) return;
+    applyConfig({ ...cfg, shellHint: false });
+    void saveConfig(cfg);
+  };
+
+  const say = document.createElement("span");
+  say.className = "hinttext";
+  say.textContent = `Status dots and directory tracking need one line in ${shortRc(hook.rc)}.`;
+
+  const what = document.createElement("code");
+  what.className = "hintline";
+  what.textContent = hook.line;
+  what.title = hook.line;
+
+  const add = document.createElement("button");
+  add.className = "askbtn primary";
+  add.textContent = "Add it";
+  add.addEventListener("click", () => {
+    add.disabled = true;
+    void invoke<string>("shell_hook_install")
+      .then((rc) => {
+        say.textContent = `Added to ${shortRc(rc)}. Panes opened from now on will have it.`;
+        what.remove();
+        add.remove();
+        setTimeout(() => dismiss(true), 6000);
+      })
+      .catch((e) => {
+        say.textContent = `Could not write it: ${String(e)}`;
+        add.disabled = false;
+      });
+  });
+
+  const no = document.createElement("button");
+  no.className = "askbtn";
+  no.textContent = "No thanks";
+  no.addEventListener("click", () => dismiss(true));
+
+  bar.replaceChildren(say, what, add, no);
+  bar.hidden = false;
+}
+
+const shortRc = (p: string): string => p.replace(/^\/Users\/[^/]+/, "~");
+
 /** The only path that ends the app, so the confirmation cannot be bypassed by
  *  arriving from a different direction. */
 async function confirmQuit(reason: string): Promise<void> {
@@ -852,7 +936,11 @@ async function closeFocused(): Promise<void> {
     return;
   }
 
-  if (!(await confirmClosePane(pane))) return;
+  // A confirmation is worth reading when there is something to lose. An idle
+  // pane has a shell and a scrollback, and asking about every one of those all
+  // day is how a dialog becomes a key you press without looking, which is
+  // exactly the state the tab and quit dialogs must not be in.
+  if (paneAtRisk(pane) && !(await confirmClosePane(pane))) return;
 
   if (tab.zoomStash) {
     tab.root = tab.zoomStash;
@@ -1050,8 +1138,22 @@ async function restoreSession(): Promise<boolean> {
   return true;
 }
 
+/**
+ * Where a new pane should start: where the one you were in is standing.
+ *
+ * The shell's own default is the home directory, which is almost never the
+ * answer when you press ⌘T in the middle of working on something. `cwd` is what
+ * the shell last reported through OSC 7, so this follows a `cd` rather than the
+ * directory the pane was opened in an hour ago.
+ */
+function currentDir(): string | null {
+  const p = app.focused && isTerm(app.focused) ? app.focused : leaves(curTab().root).map((l) => l.pane).find(isTerm);
+  return p?.cwd || p?.startCwd || null;
+}
+
 async function newTab(): Promise<void> {
   const pane = await makePane();
+  pane.startCwd = currentDir();
   app.tabs.push({ name: "", pinned: false, root: leaf(pane) });
   app.active = app.tabs.length - 1;
   app.focused = pane;
@@ -1162,6 +1264,14 @@ function handleShortcut(e: KeyboardEvent): boolean {
   }
   if (k === "0") {
     setZoom(1);
+    return false;
+  }
+  if (k === "/") {
+    showKeys(keymap);
+    return false;
+  }
+  if (k === "a" && e.shiftKey) {
+    focusNextAlert();
     return false;
   }
   if (k === ",") {
@@ -1425,6 +1535,86 @@ function applyConfig(next: Config): void {
   refreshChrome();
 }
 
+/**
+ * Every shortcut, from the one registry that defines them.
+ *
+ * Written from the command list rather than by hand, so a key that exists and a
+ * key that is documented cannot drift apart. Discoverability was the gap: the
+ * palette holds all of this and you have to know to press ⌘⇧P to find out.
+ */
+function showKeys(commands: Command[]): void {
+  const wrap = document.createElement("div");
+  wrap.className = "ask on";
+  const box = document.createElement("div");
+  box.className = "askbox branches wide";
+  const h = document.createElement("div");
+  h.className = "asktitle strong";
+  h.textContent = "Keyboard shortcuts";
+  const rows = document.createElement("div");
+  rows.className = "keys";
+  for (const c of commands) {
+    if (!c.key) continue;
+    const r = document.createElement("div");
+    r.className = "keyrow";
+    const l = document.createElement("span");
+    l.textContent = c.label;
+    const k = document.createElement("kbd");
+    k.textContent = c.key;
+    r.append(l, k);
+    rows.appendChild(r);
+  }
+  const note = document.createElement("div");
+  note.className = "brnote";
+  note.textContent = "⌘⇧P for everything else, including the actions with no key.";
+  box.append(h, rows, note);
+  wrap.appendChild(box);
+  document.body.appendChild(wrap);
+
+  const close = (): void => {
+    wrap.remove();
+    window.removeEventListener("keydown", key, true);
+  };
+  function key(e: KeyboardEvent): void {
+    if (e.key !== "Escape" && !(e.metaKey && e.key === "/")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    close();
+  }
+  window.addEventListener("keydown", key, true);
+  wrap.addEventListener("mousedown", (e) => {
+    if (e.target === wrap) close();
+  });
+}
+
+/**
+ * Focus the next pane that wants you, wherever it is.
+ *
+ * Four agents in four panes across three tabs is the case this app is for, and
+ * a dot that tells you something needs attention without taking you there
+ * leaves you hunting. Running counts as wanting you: it is what you would look
+ * at next.
+ */
+function focusNextAlert(): void {
+  const wanted: { tab: number; pane: Pane }[] = [];
+  for (const [i, t] of app.tabs.entries()) {
+    for (const l of leaves(t.root)) {
+      const p = l.pane;
+      if (isTerm(p) && (p.status === "wait" || p.status === "err" || p.status === "run")) {
+        wanted.push({ tab: i, pane: p });
+      }
+    }
+  }
+  if (!wanted.length) return;
+  // Start after the current one, so pressing it repeatedly walks the list
+  // rather than landing on the same pane every time.
+  const at = wanted.findIndex((w) => w.pane === app.focused);
+  const next = wanted[(at + 1) % wanted.length];
+  if (!next) return;
+  if (next.tab !== app.active) selectTab(next.tab);
+  focusPane(next.pane);
+  render();
+}
+
 function nextTheme(): void {
   const i = THEMES.indexOf(app.theme);
   const next = THEMES[(i + 1) % THEMES.length] as MarlinTheme;
@@ -1446,7 +1636,9 @@ async function boot(): Promise<void> {
   // One listener for every pane. Per-pane subscriptions would be N IPC
   // registrations for no benefit.
   await listen<PtyOutput>("pty:data", (e) => {
-    paneByPty(e.payload.id)?.write(e.payload.data);
+    const pane = paneByPty(e.payload.id);
+    pane?.ready();
+    pane?.write(e.payload.data);
   });
   await listen<number>("pty:exit", (e) => {
     const pane = paneByPty(e.payload);
@@ -1458,6 +1650,7 @@ async function boot(): Promise<void> {
   applyBar();
   wireTreeResize();
   await wireFileDrop();
+  void offerShellHook();
 
   // The webview brings its own context menu. Suppressing it globally, once, is
   // what makes every custom menu below actually appear.
@@ -1561,7 +1754,8 @@ async function boot(): Promise<void> {
 
   // One registry. The palette and the key map both read it, so an action cannot
   // exist in one and be missing from the other.
-  const commands: Command[] = [
+  const commands: Command[] = keymap;
+  commands.push(
     { label: "Split Vertically", key: "⌘D", run: () => void doSplit("row") },
     { label: "Split Horizontally", key: "⌘⇧D", run: () => void doSplit("col") },
     { label: "New Tab", key: "⌘T", run: () => void newTab() },
@@ -1574,6 +1768,8 @@ async function boot(): Promise<void> {
     { label: "Rename Tab", key: "⇧F2", run: () => void renameFocused(true) },
     { label: "Go to File", key: "⌘P", run: () => palette.open("file") },
     { label: "Search in Files", key: "⌘⇧F", run: () => palette.open("text") },
+    { label: "Focus Next Pane Wanting You", key: "⌘⇧A", run: focusNextAlert },
+    { label: "Keyboard Shortcuts", key: "⌘/", run: () => showKeys(commands) },
     { label: "Zoom In", key: "⌘+", run: () => zoomBy(ZOOM_STEP) },
     { label: "Zoom Out", key: "⌘-", run: () => zoomBy(-ZOOM_STEP) },
     { label: "Reset Zoom", key: "⌘0", run: () => setZoom(1) },
@@ -1595,7 +1791,7 @@ async function boot(): Promise<void> {
           if (p) openViewer(new Viewer({ kind: "file", name: "marlin.log", path: p, onClose: () => closeViewer() }));
         }),
     },
-  ];
+  );
   palette.setCommands(commands);
 
   // Footer links. Opened through the OS handler, never in the webview: a

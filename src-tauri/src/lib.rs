@@ -164,6 +164,28 @@ fn git_discard(cwd: String, path: String) -> Result<(), String> {
     git::discard(&cwd, &path).map_err(|e| e.to_string())
 }
 
+/// The resource directory, or a best guess in dev where there is none.
+fn resources(app: &AppHandle) -> std::path::PathBuf {
+    app.path()
+        .resource_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+}
+
+#[tauri::command]
+fn shell_hook(app: AppHandle) -> config::ShellHook {
+    config::shell_hook(&resources(&app))
+}
+
+#[tauri::command]
+fn shell_hook_install(app: AppHandle) -> Result<String, String> {
+    config::install_shell_hook(&resources(&app)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn git_commit(cwd: String, message: String) -> Result<String, String> {
+    git::commit(&cwd, &message).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn git_branches(cwd: String) -> Result<Vec<git::Branch>, String> {
     git::branches(&cwd).map_err(|e| e.to_string())
@@ -303,7 +325,10 @@ pub fn run() {
             git_branch_files,
             git_rev_diff,
             git_heads,
-            git_counts
+            git_counts,
+            git_commit,
+            shell_hook,
+            shell_hook_install
         ])
         .build(tauri::generate_context!())
         .expect("marlin failed to start")

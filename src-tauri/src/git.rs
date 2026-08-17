@@ -589,3 +589,18 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 }
+
+/// Commit what is staged, and nothing else.
+///
+/// No `-a`, no `--amend`, no push. This exists because reading what an agent
+/// changed and then accepting it is one thought, and having to leave for a
+/// terminal to type the second half of it is the seam this app is meant to
+/// close. Everything beyond "record what I just read and approved" is still a
+/// conversation for the pane below.
+pub fn commit(cwd: &str, message: &str) -> Result<String> {
+    let msg = message.trim();
+    if msg.is_empty() {
+        return Err(anyhow!("a commit needs a message"));
+    }
+    git(cwd, &["commit", "-m", msg])
+}
