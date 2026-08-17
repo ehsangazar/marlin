@@ -154,12 +154,19 @@ function renderTabs(): void {
     x.title = "Close tab";
     x.addEventListener("click", (e) => {
       e.stopPropagation();
-      closeTab(i);
+      void closeTabAsked(t);
     });
 
     b.append(dot, idx, lbl, x);
-    b.addEventListener("click", () => selectTab(i));
-    b.addEventListener("dblclick", (e) => {
+    b.addEventListener("click", () => {
+      if (tabDragDone) return;
+      selectTab(i);
+    });
+    // Same as the pane title bar: a draggable element never sees `dblclick` in
+    // WebKit, so the second press is caught as a `mousedown` with `detail === 2`
+    // instead. Without this, double-clicking a tab only selected it.
+    b.addEventListener("mousedown", (e) => {
+      if (e.detail !== 2) return;
       e.preventDefault();
       e.stopPropagation();
       selectTab(i);
@@ -172,8 +179,8 @@ function renderTabs(): void {
         { label: "New Tab", key: "⌘T", run: () => void newTab() },
         { label: "Rename Tab…", key: "⇧F2", run: () => void renameFocused(true) },
         { sep: true },
-        { label: "Close Tab", key: "⌘W", run: () => closeTab(i) },
-        { label: "Close Other Tabs", run: () => closeOthers(i) },
+        { label: "Close Tab", key: "⌘W", run: () => void closeTabAsked(t) },
+        { label: "Close Other Tabs", run: () => void closeOthersAsked(i) },
         { sep: true },
         { head: "Tab bar" },
         { label: "Top", run: () => setBar("h") },
@@ -472,7 +479,7 @@ async function makePane(): Promise<Pane> {
       { label: "Copy", key: "⌘C", run: () => void copySelection(pane) },
       { label: "Paste", key: "⌘V", run: () => void pasteInto(pane) },
       { sep: true },
-      { label: "Close Pane", key: "⌘W", run: closeFocused },
+      { label: "Close Pane", key: "⌘W", run: () => void closeFocused() },
     ]);
   });
   pane.term.attachCustomKeyEventHandler(handleShortcut);
@@ -558,22 +565,114 @@ async function openTerminalIn(dir: string): Promise<void> {
 }
 
 /**
- * What is still live, in the words someone would use about it. Quitting is only
- * a real decision if the dialog says what is being thrown away.
+ * What is still live in a set of panes, in the words someone would use about it.
+ * Shared by every close dialog so a pane, a tab and the whole app are described
+ * the same way rather than each inventing its own vocabulary.
  */
-function liveSummary(): string {
-  const panes = app.tabs.flatMap((t) => leaves(t.root).map((l) => l.pane));
+function stateBits(panes: Surface[]): string[] {
   const terms = panes.filter(isTerm);
   const running = terms.filter((p) => p.status === "run").length;
   const waiting = terms.filter((p) => p.status === "wait").length;
   const dirty = panes.filter((p) => p instanceof Viewer && p.isDirty).length;
 
   const bits: string[] = [];
-  bits.push(`${terms.length} ${terms.length === 1 ? "pane" : "panes"} across ${app.tabs.length} ${app.tabs.length === 1 ? "tab" : "tabs"}`);
   if (running) bits.push(`${running} still running`);
   if (waiting) bits.push(`${waiting} waiting for you`);
   if (dirty) bits.push(`${dirty} with unsaved changes`);
+  return bits;
+}
+
+/**
+ * What is still live, in the words someone would use about it. Quitting is only
+ * a real decision if the dialog says what is being thrown away.
+ */
+function liveSummary(): string {
+  const panes = allSurfaces();
+  const terms = panes.filter(isTerm);
+  const bits = [
+    `${terms.length} ${terms.length === 1 ? "pane" : "panes"} across ${app.tabs.length} ${app.tabs.length === 1 ? "tab" : "tabs"}`,
+    ...stateBits(panes),
+  ];
   return bits.join(", ") + ".";
+}
+
+/** One pane, said plainly. "Nothing is running in it" is worth printing: a
+ *  dialog that only speaks up when something is at stake teaches you to read it,
+ *  and a dialog that says nothing teaches you to click through it. */
+function paneState(s: Surface): string {
+  if (s instanceof Viewer) return s.isDirty ? "It has unsaved changes." : "Nothing in it is unsaved.";
+  if (!isTerm(s)) return "";
+  if (s.status === "run") return "A command is still running in it.";
+  if (s.status === "wait") return "It is waiting for you.";
+  return "Nothing is running in it.";
+}
+
+/** Closing one pane out of several. The rest of the tab is untouched. */
+async function confirmClosePane(pane: Surface): Promise<boolean> {
+  return confirm({
+    title: "Close this pane?",
+    body: `“${pane.name}”. ${paneState(pane)}${isTerm(pane) ? " Its shell will be terminated." : ""}`,
+    ok: "Close Pane",
+    danger: true,
+  });
+}
+
+/**
+ * Closing a whole tab, whichever way it was asked for: the ×, the tab menu, or
+ * ⌘W on the last pane it had left. `lead` is how it was asked, and is only
+ * passed when the tab is closing as a consequence of something else rather than
+ * because someone aimed at the tab itself.
+ */
+async function confirmCloseTab(tab: Tab, lead?: string): Promise<boolean> {
+  const panes = leaves(tab.zoomStash ?? tab.root).map((l) => l.pane);
+  const bits = stateBits(panes);
+  const held = `“${tabLabel(tab)}” holds ${panes.length} ${panes.length === 1 ? "pane" : "panes"}${bits.length ? `, ${bits.join(", ")}` : ""}.`;
+  const shells = panes.some(isTerm)
+    ? ` Every shell in it will be terminated.`
+    : "";
+  return confirm({
+    title: "Close this tab?",
+    body: `${lead ? `${lead} ` : ""}${held}${shells}`,
+    ok: "Close Tab",
+    danger: true,
+  });
+}
+
+/**
+ * The asked-first route to closing a tab, which is every route a person can
+ * take. `closeTab` itself stays blunt because the code paths that already have
+ * an answer, and the ones tearing down what is left of a tab, must not ask
+ * again.
+ *
+ * The tab is held as itself rather than as the index it had when it was
+ * clicked: the bar can re-render while the dialog is open, and an index that
+ * pointed at the right tab a moment ago would close the wrong one.
+ */
+async function closeTabAsked(tab: Tab): Promise<void> {
+  if (!(await confirmCloseTab(tab))) return;
+  const i = app.tabs.indexOf(tab);
+  if (i >= 0) closeTab(i);
+}
+
+/** Closing everything but one tab is one decision, so it is one dialog rather
+ *  than one per tab. */
+async function closeOthersAsked(keep: number): Promise<void> {
+  const survivor = app.tabs[keep];
+  if (!survivor) return;
+  const others = app.tabs.filter((t) => t !== survivor);
+  if (!others.length) return;
+
+  const panes = others.flatMap((t) => leaves(t.zoomStash ?? t.root).map((l) => l.pane));
+  const bits = stateBits(panes);
+  const ok = await confirm({
+    title: others.length === 1 ? "Close the other tab?" : `Close ${others.length} other tabs?`,
+    body: `${panes.length} ${panes.length === 1 ? "pane" : "panes"}${bits.length ? `, ${bits.join(", ")}` : ""}. Only “${tabLabel(survivor)}” is kept, and every shell in the rest will be terminated.`,
+    ok: "Close Tabs",
+    danger: true,
+  });
+  if (!ok) return;
+  const i = app.tabs.indexOf(survivor);
+  if (i >= 0) closeOthers(i);
 }
 
 /** The only path that ends the app, so the confirmation cannot be bypassed by
@@ -593,30 +692,52 @@ async function confirmQuit(reason: string): Promise<void> {
   await invoke("quit_app").catch(() => {});
 }
 
-function closeFocused(): void {
+/**
+ * ⌘W closes one thing, and which thing depends on what is left around it: a
+ * pane, or the tab when that pane was its last, or Marlin when that tab was its
+ * last. Each one asks first, in its own name. A dialog that said "close?"
+ * without saying what would close is the reason this exists.
+ */
+async function closeFocused(): Promise<void> {
   const tab = curTab();
-  if (!app.focused) return;
+  const pane = app.focused;
+  if (!pane) return;
 
-  // A zoomed pane is the only leaf in the tree, but the tab is not down to one
-  // pane: the rest are parked in the stash. Counting the visible tree read a
-  // zoom as the last pane, so Cmd+W offered to quit the whole app over a tab
-  // that still had panes in it. Unzoom first and the count is the real one.
+  // A zoomed pane is the only leaf in the visible tree, but the tab is not down
+  // to one pane: the rest are parked in the stash. Counting the visible tree
+  // read a zoom as the last pane, so ⌘W offered to close the tab over one that
+  // still had panes in it. Count the stash and the number is the real one; the
+  // unzoom itself waits until the answer is yes, or cancelling would silently
+  // undo the zoom.
+  const whole = tab.zoomStash ?? tab.root;
+
+  // Last pane in the tab closes the tab. Last pane in the last tab means the
+  // window would be empty, which is not a state worth reaching: at that point
+  // ⌘W is someone trying to quit, so treat it as that and ask.
+  if (leaves(whole).length === 1) {
+    if (app.tabs.length > 1) {
+      const lead = `This is the last pane in the tab, so closing it closes the tab. ${paneState(pane)}`;
+      if (!(await confirmCloseTab(tab, lead))) return;
+      const i = app.tabs.indexOf(tab);
+      if (i >= 0) closeTab(i);
+    } else {
+      await confirmQuit("This is the last pane, so closing it closes Marlin.");
+    }
+    return;
+  }
+
+  if (!(await confirmClosePane(pane))) return;
+
   if (tab.zoomStash) {
     tab.root = tab.zoomStash;
     tab.zoomStash = null;
   }
 
-  const target = findLeaf(tab.root, app.focused);
+  // The dialog was open long enough for the pane to have gone: a shell can exit
+  // on its own, and the tab can be closed from somewhere else while it waits.
+  const target = findLeaf(tab.root, pane);
   if (!target) return;
-
-  // Last pane in the tab closes the tab. Last pane in the last tab means the
-  // window would be empty, which is not a state worth reaching: at that point
-  // Cmd+W is someone trying to quit, so treat it as that and ask.
-  if (leaves(tab.root).length === 1) {
-    if (app.tabs.length > 1) closeTab(app.active);
-    else void confirmQuit("This is the last pane, so closing it closes Marlin.");
-    return;
-  }
+  if (leaves(tab.root).length === 1) return;
 
   target.pane.dispose();
   const next = removeNode(tab.root, target);
@@ -1262,7 +1383,7 @@ async function boot(): Promise<void> {
     { label: "Zoom Pane", key: "⌘⇧↩", run: zoomPane },
     { label: "Find in Scrollback", key: "⌘F", run: () => { if (app.focused && isTerm(app.focused)) find.open(app.focused); } },
     { label: "Clear Buffer", key: "⌘K", run: () => { if (app.focused && isTerm(app.focused)) app.focused.term.clear(); } },
-    { label: "Close Other Tabs", run: () => closeOthers(app.active) },
+    { label: "Close Other Tabs", run: () => void closeOthersAsked(app.active) },
     { label: "Report a Bug", run: () => void reporter.openIssue("bug") },
     { label: "Request a Feature", run: () => void reporter.openIssue("feature") },
     {
