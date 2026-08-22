@@ -676,22 +676,41 @@ jobs:
           # AppImage mount and run anyway. Something in the sentence on the
           # README and the landing page is wrong, and guessing which part is how
           # a second wrong sentence gets written. So: print what is here.
+          #
+          # In a subshell with `set +e +o pipefail`, and that is not tidiness.
+          # Run 32602196863 put this block straight into the gating step's error
+          # handling, `ldd` answered "not a dynamic executable" and exited 1
+          # because the AppImage runtime is static, and a DIAGNOSTIC took down
+          # the gate it was printing next to. Every command in here is allowed
+          # to fail; that is what makes them diagnostics. The `|| true` on the
+          # subshell is the second belt.
           echo "::group::what this machine has for FUSE"
-          ldconfig -p | grep -i fuse || echo "  no libfuse of any version in the linker cache"
-          command -v fusermount || echo "  no fusermount (that is the FUSE 2 helper)"
-          command -v fusermount3 || echo "  no fusermount3 (that is the FUSE 3 helper)"
-          ls -l /dev/fuse || echo "  no /dev/fuse"
-          dpkg -l 2>/dev/null | grep -iE '\bfuse' || echo "  no fuse package installed"
-          # And what the AppImage's own runtime demands, which is the decisive
-          # one and was the question the first run left open. An AppImage is an
-          # ELF executable with a squashfs stapled to the end of it, so the
-          # loader will say plainly whether libfuse.so.2 is a hard requirement
-          # of the runtime or whether the runtime carries its own.
-          echo "  what the AppImage runtime links against:"
-          ldd "$APPIMG" 2>&1 | sed 's/^/    /'
-          echo "  strings in the AppImage runtime that mention fuse:"
-          head -c 200000 "$APPIMG" > /tmp/appimage-runtime.bin
-          strings -n 6 /tmp/appimage-runtime.bin | grep -iE 'fuse' | sort -u | head -20 | sed 's/^/    /'
+          (
+            set +e +o pipefail
+            ldconfig -p | grep -i fuse || echo "  no libfuse of any version in the linker cache"
+            command -v fusermount  || echo "  no fusermount (that is the FUSE 2 helper)"
+            command -v fusermount3 || echo "  no fusermount3 (that is the FUSE 3 helper)"
+            # Which package puts fusermount there matters more than whether it
+            # is there: if stock `fuse3` provides it, the static runtime finds a
+            # helper on any modern Ubuntu and the caveat has no subject.
+            dpkg -S /usr/bin/fusermount /usr/bin/fusermount3 2>&1 | sed 's/^/  /'
+            ls -l /dev/fuse || echo "  no /dev/fuse"
+            dpkg -l | grep -iE '\bfuse' || echo "  no fuse package installed"
+
+            # And what the AppImage's own runtime demands, which is the decisive
+            # measurement and the one the first run was missing. An AppImage is
+            # an ELF with a squashfs stapled to the end of it, so the loader
+            # says plainly whether libfuse.so.2 is a hard requirement of the
+            # runtime or whether the runtime carries its own. "not a dynamic
+            # executable" is the answer that retires the caveat: a static
+            # runtime cannot be missing a shared library.
+            echo "  what the AppImage runtime links against:"
+            file "$APPIMG" | sed 's/^/    /'
+            ldd  "$APPIMG" 2>&1 | sed 's/^/    /'
+            echo "  strings in the AppImage runtime that mention fuse:"
+            head -c 200000 "$APPIMG" > /tmp/appimage-runtime.bin
+            strings -n 6 /tmp/appimage-runtime.bin | grep -iE 'fuse' | sort -u | head -20 | sed 's/^/    /'
+          ) || true
           echo "::endgroup::"
 
           {
@@ -837,6 +856,7 @@ jobs:
             ldconfig -p | grep -i fuse | sed "s/^/      /" || echo "      no libfuse in the linker cache"
             command -v fusermount  || echo "      no fusermount (FUSE 2 helper), which is stock for >= 22.04"
             command -v fusermount3 || echo "      no fusermount3 (FUSE 3 helper)"
+            dpkg -S /usr/bin/fusermount /usr/bin/fusermount3 2>&1 | sed "s/^/      /"
             ls -l /dev/fuse || echo "      no /dev/fuse"
 
             echo "--- plainly, which is what a stock Ubuntu user actually types:"
