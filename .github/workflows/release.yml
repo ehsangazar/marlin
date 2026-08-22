@@ -8,6 +8,14 @@
 # What this produces, per tag:
 #   macOS    one universal disk image, Apple Silicon and Intel in one file
 #   Windows  an NSIS installer and an MSI, x64
+#   Linux    an AppImage and a .deb, x64
+#
+# Linux was added last and is the only one of the three that a user can run
+# without arguing with their operating system first. There is no Apple
+# Developer ID and no Windows signing certificate, and after six refused
+# enrolment attempts there is no date by which there will be, so the macOS
+# download meets Gatekeeper and the Windows download meets SmartScreen. The
+# Linux download meets nothing. That is why this file grew a third leg.
 #
 # Deliberately NOT here: publishing site/version.json. That file is the update
 # feed every installed copy polls, it lives on the Hetzner box, and putting a
@@ -90,8 +98,8 @@ jobs:
     # `always()` so a dry run, which skips the draft job, still builds.
     if: ${{ always() && needs.draft.result != 'failure' }}
     strategy:
-      # One platform failing should still leave the other's installer attached,
-      # so the release can be salvaged by rerunning a single job.
+      # One platform failing should still leave the others' installers
+      # attached, so the release can be salvaged by rerunning a single job.
       fail-fast: false
       matrix:
         include:
@@ -101,17 +109,86 @@ jobs:
             os: macos-14
             target: universal-apple-darwin
             rust_targets: aarch64-apple-darwin x86_64-apple-darwin
+            # Empty on purpose: tauri.conf.json says `"targets": "all"` and on
+            # these two platforms that is already the right answer. Only Linux
+            # needs to narrow it, and see the build step for why this is a
+            # matrix key rather than an `if:` on a second copy of the step.
+            bundle_args: ""
             glob: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
           - name: Windows (x64)
             os: windows-latest
             target: x86_64-pc-windows-msvc
             rust_targets: x86_64-pc-windows-msvc
+            bundle_args: ""
             glob: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/{nsis/*.exe,msi/*.msi}
+          # Two bundles, and the third was rejected rather than forgotten.
+          #
+          #   appimage  one file, `chmod +x`, no root and no package manager,
+          #             and it runs on a distro nobody here has heard of. It is
+          #             the artefact the download page should point at.
+          #   deb       because the AppImage has one real wart and pretending
+          #             otherwise gets found out in public: Ubuntu dropped
+          #             libfuse2 from the default install at 22.04, and a type-2
+          #             AppImage on a stock Ubuntu greets you with a dlopen
+          #             error about libfuse.so.2. The .deb sidesteps that on the
+          #             most common desktop Linux there is, and puts Marlin in
+          #             the application menu instead of in ~/Downloads.
+          #   rpm       NOT built. Every rpm distro can run the AppImage, dnf
+          #             warns about an unsigned package off a website anyway,
+          #             and there is no repository behind it for anything to
+          #             update from. It buys a third thing to pick wrong on the
+          #             download page and nothing else.
+          #
+          # ubuntu-22.04, not `ubuntu-latest`, and this is the one thing ci.yml
+          # is allowed to be careless about because it never ships what it
+          # compiles. An AppImage bundles webkit and its friends; it does NOT
+          # bundle glibc, so the build machine's glibc silently becomes the
+          # artefact's minimum. Built on 24.04 that floor is 2.39, which locks
+          # out Ubuntu 22.04 LTS (2.35), Debian 12 (2.36) and RHEL 9 (2.34):
+          # a file whose entire pitch is "runs anywhere" refusing to start on
+          # the most widely installed LTS. Built here the floor is 2.35 and all
+          # of those work.
+          #
+          # This has an expiry and it is dated, so nobody has to rediscover it:
+          # GitHub begins deprecating the Ubuntu 22 images on 17 Sep 2026 and
+          # removes them by 17 Apr 2027. When this leg starts failing to find a
+          # runner, that is why. The fix is not `ubuntu-latest`, which just
+          # moves the floor up again; it is building inside an older container
+          # on a newer runner, so the glibc floor stops being a property of
+          # whichever image GitHub is retiring this year.
+          - name: Linux (x64)
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            rust_targets: x86_64-unknown-linux-gnu
+            bundle_args: --bundles deb,appimage
+            # Brace expansion, exactly like the Windows entry above, and for the
+            # same reason: two bundlers write into two sibling directories. The
+            # comments on the upload step explain why this is bare brace
+            # expansion and not `shopt -s globstar`; do not "fix" it back.
+            # `appimage/` also holds the Marlin.AppDir staging tree that built
+            # the thing, which `*.AppImage` correctly does not match.
+            glob: src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/{deb/*.deb,appimage/*.AppImage}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # Tauri links against the system webview. macOS and Windows ship one and
+      # Linux does not, so without this the failure arrives as a pkg-config
+      # error out of a -sys crate's build script during Clippy, several steps
+      # before anything that looks like bundling. This list is character for
+      # character the one ci.yml has been proving on a runner since Linux joined
+      # that matrix, and it is duplicated rather than shared on purpose: two
+      # copies that are identical are easier to reason about than one composite
+      # action, but they do have to be kept identical.
+      - name: Install the Linux webview dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
       - uses: dtolnay/rust-toolchain@stable
       - name: Add the build targets
@@ -141,14 +218,21 @@ jobs:
         working-directory: src-tauri
         run: cargo test --all
 
-      # Unsigned, and the workflow says so rather than letting it be discovered
-      # at the far end. There is no Apple Developer ID and no Windows signing
-      # certificate, so macOS shows "Apple could not verify this app" and
-      # Windows shows SmartScreen. Both are covered in the README. When the
-      # certificates exist, they plug in here as secrets and nothing else in
-      # this file changes.
+      # Unsigned on two of the three, and the workflow says so rather than
+      # letting it be discovered at the far end. There is no Apple Developer ID
+      # and no Windows signing certificate, so macOS shows "Apple could not
+      # verify this app" and Windows shows SmartScreen. Both are covered in the
+      # README. Linux asks for neither and that is not a gap to be closed later,
+      # it is the reason the Linux leg is worth its runner minutes. When the
+      # other two certificates exist they plug in here as secrets and nothing
+      # else in this file changes.
+      #
+      # `bundle_args` is a matrix key, empty on macOS and Windows, rather than a
+      # second copy of this step behind an `if:`. Two build steps that must stay
+      # in step with each other is how one of them quietly stops getting the
+      # flag the other gained.
       - name: Build the installers
-        run: pnpm tauri build --target ${{ matrix.target }}
+        run: pnpm tauri build --target ${{ matrix.target }} ${{ matrix.bundle_args }}
 
       - name: Upload them to the release
         shell: bash
@@ -203,7 +287,17 @@ jobs:
   smoke:
     name: Windows smoke test
     needs: bundle
-    if: ${{ always() && needs.bundle.result == 'success' }}
+    # `needs.bundle.result` is the whole matrix and there is no way to depend on
+    # one leg of one, so when Linux was added this job's gate quietly became
+    # "and Linux was fine too". A missing apt package on a machine with no
+    # relationship to Windows would then delete the only Windows evidence this
+    # project has, which is the exact opposite of why the job exists.
+    #
+    # It rebuilds Windows from source below and reads nothing the bundle job
+    # produced, so it never needed that job to succeed at all: `needs` is here
+    # for ordering, and to not burn a Windows runner on a workflow whose draft
+    # step already failed. `!cancelled()` keeps that and gives up the coupling.
+    if: ${{ !cancelled() && needs.bundle.result != 'skipped' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -304,7 +398,10 @@ jobs:
 
   # Undraft only once every platform has attached something. A half-populated
   # release that is already public is the one state the update feed must never
-  # be pointed at.
+  # be pointed at. No `always()` here, so this inherits "every leg of `bundle`
+  # succeeded", and adding Linux to that matrix deliberately added Linux to this
+  # gate: a release that says it ships Linux and does not is worse than a
+  # release that waits.
   publish:
     name: Publish the release
     needs: bundle
