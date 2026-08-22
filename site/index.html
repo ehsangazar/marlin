@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Marlin, a terminal built for running coding agents</title>
+<title>Marlin, the terminal where you read what your agents did</title>
 <meta name="description" content="A native, open-source terminal for running coding agents, with a git tree, diffs and syntax highlighting built in, so you read what an agent changed without leaving the terminal.">
 <meta property="og:title" content="Marlin">
 <meta property="og:description" content="The terminal where you read what your agents did. Native, open source, no account, no telemetry.">
@@ -537,13 +537,19 @@
       That last part is the one you feel, so this page still claims no speed.</li>
     <li><b>The numbers are one laptop.</b> Nothing tracks them over time and nothing fails when they
       regress.</li>
-    <li><b>Builds are unsigned</b>, so macOS will complain about an unidentified developer.</li>
+    <li><b>Builds carry an ad-hoc signature, not a certificate.</b> macOS shows the
+      unidentified-developer warning once, on first launch. Until 22 August this was worse than
+      that: nothing configured a signing identity, so the bundle went out with the linker's ad-hoc
+      signature and no sealed resources, which macOS reads as <i>damaged</i> rather than as
+      untrusted. Fixed, and a release step now fails the build if it regresses. Notarising it needs
+      an Apple account this project does not have.</li>
     <li><b>No release has been through the cross-platform pipeline yet.</b> Both workflows now run
-      on GitHub, and the release build went green on 16 August for macOS universal and Windows x64,
-      including an installer that installed and stayed running on a Windows runner. What has never
-      happened is a <i>tag</i> going through it, so the only thing on the releases page is still the
-      one hand-built aarch64 image, until 0.1.2 proves otherwise. Nobody has sat in front of Marlin
-      on Windows, and Linux is compiled but never packaged.</li>
+      on GitHub, and the release build has gone green on macOS universal, Windows x64 and, since
+      22 August, Linux x64, including an installer that installed and stayed running on a Windows
+      runner. What has never happened is a <i>tag</i> going through it, so the only thing on the
+      releases page is still the one hand-built aarch64 image, until 0.1.2 proves otherwise. Nobody
+      has sat in front of Marlin on Windows, and the Linux packages have never been run by
+      anybody.</li>
     <li><b>A restored session is a layout, not a session.</b> Tabs, splits and directories come back.
       Scrollback and what was running do not, and faking that would be worse than an empty prompt in
       the right place.</li>
@@ -557,7 +563,7 @@
 </section>
 
 <section id="install" class="wrap">
-  <div class="head"><h2>Install</h2><span class="note">macOS and Windows</span></div>
+  <div class="head"><h2>Install</h2><span class="note">macOS, Windows and Linux</span></div>
   <p><strong>What exists to download today</strong> is one file: an <code>aarch64</code> disk
   image on the <a href="https://github.com/ehsangazar/marlin/releases">releases page</a>, version
   0.1.1, built by hand on one Apple silicon Mac. If you are on an Intel Mac, on Windows, or on
@@ -578,27 +584,47 @@
         <td>Build from source.</td>
         <td>A <code>-setup.exe</code> that installs for the current user with no admin prompt, and
         an <code>.msi</code> for anyone deploying it.</td></tr>
-      <tr><th scope="row">Linux</th>
+      <tr><th scope="row">Linux, x64</th>
         <td>Build from source.</td>
-        <td>Still build from source. It compiles and its tests run on every push, but nothing is
-        packaged for you to download.</td></tr>
+        <td>A <code>.deb</code> for Debian and Ubuntu, and an <code>.AppImage</code> for everything
+        else. Neither is signed and neither needs to be: nothing on Linux asks. The AppImage is
+        around 78MB against a 6MB disk image, because it carries the webview with it.</td></tr>
     </tbody>
   </table></div>
 
-  <p style="margin-top:1.3rem"><strong>Nothing is signed.</strong> There is no Apple Developer ID
-  and no Windows signing certificate, so macOS says the developer is unidentified and Windows shows
-  SmartScreen. That warning is accurate: nobody has paid a certificate authority to vouch for this
-  build. On macOS, right-click the app and choose Open, or run
-  <code>xattr -dr com.apple.quarantine /Applications/Marlin.app</code>. On Windows, choose
-  <strong>More info</strong>, then <strong>Run anyway</strong>.</p>
+  <p style="margin-top:1.3rem"><strong>Nothing is signed by a certificate authority.</strong> There
+  is no Apple Developer ID and no Windows signing certificate, so macOS and Windows both stop you
+  the first time. That warning is accurate: nobody has paid anyone to vouch for this build.
+  <strong>It happens once.</strong> Once you have allowed it, macOS saves the exception and Marlin
+  opens by double-clicking from then on, and updates install in place without ever asking again.</p>
+
+  <p><strong>On macOS</strong> you get a dialog headed <b>&ldquo;Marlin&rdquo; Not Opened</b>, saying
+  Apple could not verify Marlin is free of malware. Its two buttons are <b>Done</b> and
+  <b>Move to Trash</b>, and Move to Trash is the highlighted one, so do not press it out of habit.
+  Open <b>System Settings</b>, then <b>Privacy &amp; Security</b>, scroll to <b>Security</b>, and
+  click <b>Open Anyway</b> next to Marlin. That button is only there for about an hour after you
+  tried to open it. Right-clicking and choosing Open used to do the same job and
+  <strong>stopped working in macOS Sequoia</strong>. If you would rather stay in a terminal,
+  <code>xattr -dr com.apple.quarantine /Applications/Marlin.app</code> does it, and downloading with
+  <code>curl</code> rather than a browser skips the question entirely, because the flag that
+  triggers it is attached by whatever downloaded the file.</p>
+
+  <p><strong>On Windows</strong>, SmartScreen shows &ldquo;Windows protected your PC&rdquo;. Choose
+  <strong>More info</strong>, then <strong>Run anyway</strong>. <strong>On Linux</strong> there is
+  none of this; the <code>.deb</code> and the AppImage just run. One wart worth knowing before you
+  hit it: the AppImage needs FUSE 2, and Ubuntu has not shipped <code>libfuse2</code> by default
+  since 22.04, so on a stock Ubuntu it fails with a <code>libfuse.so.2</code> error. Install
+  <code>libfuse2</code>, or run it with <code>--appimage-extract-and-run</code>, or just take the
+  <code>.deb</code>.</p>
 
   <p style="font-size:.86rem;color:var(--dim)"><strong>The Windows build is a pipeline, not yet a
   fact.</strong> The release workflow that produces those installers, and that installs the Windows
-  one on a runner to check it starts, was written on 16 August 2026 and <strong>has not run
-  yet</strong>. Version 0.1.2 will be the first release through it. Even once it has, that check
-  proves the installer works and the process starts, not that the window renders or that typing
-  does: nobody has sat in front of Marlin on Windows. Say so in an issue if it misbehaves; it is a
-  bug, not a known limitation.</p>
+  one on a runner to check it starts, <strong>has run and gone green on all three platforms</strong>,
+  most recently on 22 August 2026. What it has never done is run against a <i>tag</i>, which is what
+  version 0.1.2 will be. And that check proves the installer works and the process starts, not that
+  the window renders or that typing does: nobody has sat in front of Marlin on Windows, and nobody
+  has run the Linux packages at all. Say so in an issue if it misbehaves; it is a bug, not a known
+  limitation.</p>
 
   <div class="cols" style="margin-top:1.7rem">
     <div>

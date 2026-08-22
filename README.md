@@ -128,12 +128,18 @@ because a stale gap list flatters you just as much as no gap list at all.
   claims no speed.
 - **Nothing is measured on a machine that is not this one.** The numbers below are one
   laptop. There is no tracking over time and nothing fails when they regress.
-- **Builds are unsigned**, so macOS warns about an unidentified developer. Building from
-  source avoids the question.
-- **The cross-platform pipeline has never run.** Both workflows were written on 16 Aug 2026 and
-  no push or tag has gone through either, so "tested on three platforms" is a file on a disk
-  until 0.1.2 proves otherwise. Even after it runs, nobody will have *sat in front of* Marlin on
-  Windows, and Linux is compiled but never packaged.
+- **Builds carry an ad-hoc signature, not a certificate.** macOS shows the unidentified-developer
+  warning and Windows shows SmartScreen, both once, on first launch. Until 22 Aug 2026 this was
+  worse than that sentence admits: nothing configured a signing identity, so the bundle shipped with
+  the linker's ad-hoc signature and no sealed resources, and macOS reads that as *damaged* rather
+  than as untrusted. It is now signed ad-hoc properly, and a release step fails the build if the
+  resources stop being sealed. **Notarisation is still missing and needs an Apple account this
+  project does not have.** Building from source avoids the question.
+- **No tag has been through the release pipeline.** Both workflows were written on 16 Aug 2026;
+  `ci.yml` has run on every push since and `release.yml` has gone green as a dry run on macOS,
+  Windows and Linux, but **0.1.2 will be the first actual release through it**. Nobody has *sat in
+  front of* Marlin on Windows, and the Linux packages are built and have never been run by
+  anybody.
 - **The update installs without a signature to verify.** TLS to the feed and to the release
   host is the whole of what it trusts. See [`update.rs`](src-tauri/src/update.rs).
 - **A restored session is a layout, not a session.** Tabs, splits, directories and pinned
@@ -186,37 +192,64 @@ out of a build.
 | macOS, Apple silicon or Intel | `Marlin_<version>_universal.dmg` | One universal binary, both architectures |
 | Windows 10 or 11, x64 | `Marlin_<version>_x64-setup.exe` | Installs for the current user, no admin prompt |
 | Windows, deploying it | `Marlin_<version>_x64_en-US.msi` | Same app, for people who need an MSI |
+| Debian, Ubuntu and anything apt | `Marlin_<version>_amd64.deb` | Start here on Ubuntu, see the AppImage note below |
+| Any other Linux, x64 | `Marlin_<version>_amd64.AppImage` | `chmod +x` and run it. No root, no package manager |
 
-**Nothing is signed.** There is no Apple Developer ID and no Windows signing certificate, so both
-systems will tell you the app is from an unidentified developer. That warning is accurate: it says
-nobody has paid a certificate authority to vouch for this build. It is not a judgement about the
-contents, and it is also not nothing, so here is exactly how to get past it on each platform.
+**Nothing is signed by a certificate authority.** There is no Apple Developer ID and no Windows
+signing certificate, so macOS and Windows both stop you the first time. That warning is accurate:
+nobody has paid anyone to vouch for this build. It is not a judgement about the contents, and it is
+also not nothing, so here is exactly what you will see and what to do about it.
 
-On **macOS**, the disk image is quarantined by the browser that downloaded it. Right-click the app
-and choose Open, or:
+**It happens once.** Once you have allowed it, macOS saves the exception and Marlin opens by
+double-clicking from then on. Updates install in place and never ask again, because the warning is
+attached by whatever *downloads* a file and Marlin fetching its own disk image does not attach it.
+
+On **macOS** you get a dialog headed **"Marlin" Not Opened**, saying Apple could not verify Marlin
+is free of malware. Its two buttons are **Done** and **Move to Trash**, and Move to Trash is the
+highlighted one, so do not press it out of habit. Open **System Settings**, then
+**Privacy & Security**, scroll to **Security**, and click **Open Anyway** next to Marlin. That
+button is only there for about an hour after you tried to open it.
+
+Right-clicking and choosing Open used to do the same job and **stopped working in macOS Sequoia**,
+which removed that override. Plenty of projects still tell you to do it. If you would rather stay in
+a terminal:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Marlin.app
 ```
 
+Downloading with `curl` rather than a browser skips the question entirely, for the same reason:
+`curl` does not mark what it downloads.
+
 On **Windows**, SmartScreen shows "Windows protected your PC". Choose **More info**, then
 **Run anyway**.
 
-Building from source avoids the question on both, and is what we would do in your position.
+On **Linux** there is none of this. The `.deb` and the AppImage just run.
+
+**One Linux wart worth knowing before you hit it.** The AppImage needs FUSE 2, and Ubuntu has not
+installed `libfuse2` by default since 22.04, so on a stock Ubuntu it fails with a `libfuse.so.2`
+error. Either `sudo apt install libfuse2`, or run it as
+`./Marlin_<version>_amd64.AppImage --appimage-extract-and-run`, or just take the `.deb`, which is
+why the `.deb` is listed first.
+
+Building from source avoids the question everywhere, and is what we would do in your position.
 
 > **Windows is built and started, not lived in, and read the tense here carefully.** Two
 > workflows exist. [`ci.yml`](.github/workflows/ci.yml) compiles, clippies and tests on macOS,
 > Linux and Windows on every push. [`release.yml`](.github/workflows/release.yml) builds the
 > installers above on macOS and Windows for every tag, then installs the Windows one silently on
-> a runner and checks the executable starts and is still alive twenty seconds later. Linux is
-> compiled and tested; no Linux package is produced.
+> a runner and checks the executable starts and is still alive twenty seconds later. Since
+> 22 Aug 2026 it also builds Linux, on `ubuntu-22.04` so the artefacts do not demand a newer glibc
+> than the distributions they are for.
 >
-> **Neither has run yet.** They were written on 16 Aug 2026 and 0.1.2 will be the first release
-> to go through them, so until that tag exists, the Windows installers described above are a
-> pipeline rather than a fact. That is the whole reason this paragraph is worded in the present
-> tense elsewhere and not here.
+> **Both have run, and no tag has been through either.** `ci.yml` runs on every push. `release.yml`
+> has been dispatched as a dry run and gone green on all three platforms, so the installers above
+> are files that have been built rather than filenames someone predicted. What has never happened
+> is a *tag* going through it, which is what 0.1.2 will be. **The Linux artefacts are built and
+> have never been run by anybody**, which is the same sentence this README uses about Windows, and
+> Windows at least has the smoke job.
 >
-> Once it has run, that smoke test proves the installer works and the process starts. It proves
+> That smoke test proves the installer works and the process starts. It proves
 > nothing a person would notice: not that the window renders, not that a prompt appears, not that
 > typing works. The day-to-day use behind "it works and it is used" is macOS. If Windows
 > misbehaves, that is a bug worth

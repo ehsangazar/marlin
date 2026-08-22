@@ -2,7 +2,7 @@
 name = "marlin"
 version = "0.1.1"
 edition = "2021"
-description = "A terminal built for running coding agents"
+description = "The terminal where you read what your agents did"
 repository = "https://github.com/ehsangazar/marlin"
 license = "MIT"
 

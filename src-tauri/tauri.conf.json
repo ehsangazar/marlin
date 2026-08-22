@@ -31,7 +31,7 @@
     "active": true,
     "targets": "all",
     "category": "DeveloperTool",
-    "shortDescription": "A terminal built for running coding agents",
+    "shortDescription": "The terminal where you read what your agents did",
     "copyright": "MIT",
     "resources": {
       "../shell/marlin.zsh": "shell/marlin.zsh",
