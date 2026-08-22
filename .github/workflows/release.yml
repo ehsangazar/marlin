@@ -335,7 +335,7 @@ jobs:
   # executable lands where the installer says, the process starts and does not
   # exit on its own. It CANNOT prove anything a person would notice: whether the
   # window renders, whether a prompt appears, whether typing works.
-  smoke:
+  smoke-windows:
     name: Windows smoke test
     needs: bundle
     # `needs.bundle.result` is the whole matrix and there is no way to depend on
@@ -446,6 +446,336 @@ jobs:
           }
           Stop-Process -Id $p.Id -Force
           "- Marlin.exe started and was still running after 20s" >> $env:GITHUB_STEP_SUMMARY
+
+  # Does the Linux build actually install and start?
+  #
+  # The Windows job above exists because "the Windows package is built and
+  # nobody has ever run it" was true. On 22 Aug 2026 that sentence was word for
+  # word true of Linux as well, and Linux is the platform the r/rust post is
+  # aimed at, so the audience most likely to run the package was the one whose
+  # package had least evidence behind it. This job is that sentence's answer.
+  #
+  # What this can and cannot prove, stated as plainly as the Windows one is.
+  # It CAN prove: the .deb resolves its own dependencies and installs on an
+  # Ubuntu that has never seen a compiler, the AppImage's payload is intact and
+  # extractable, and each of them produces a process that starts and does not
+  # exit on its own. It CANNOT prove anything a person would notice: whether the
+  # window renders, whether a prompt appears, whether typing works. A virtual
+  # framebuffer answers "did the process survive", not "was there anything on
+  # the screen".
+  #
+  # Two artefacts, two steps each, because they fail differently and a single
+  # verdict covering both would hide whichever one broke:
+  #
+  #   .deb       the apt path, and the one the download page lists first. Its
+  #              failure mode is dependency metadata: tauri-bundler derives
+  #              Depends from what the binary linked against on the build
+  #              machine, and the build machine has every -dev package there is.
+  #              So the interesting test is not on this runner, it is inside a
+  #              bare ubuntu:22.04 container that has none of them.
+  #   AppImage   its failure mode is FUSE. Ubuntu stopped installing libfuse2 by
+  #              default at 22.04 and a type-2 AppImage needs it, so a stock
+  #              Ubuntu user gets a dlopen error about libfuse.so.2 instead of a
+  #              terminal. The README and the landing page both answer that with
+  #              `--appimage-extract-and-run`, and a documented workaround that
+  #              nobody has run is just another claim, so this job runs it.
+  #
+  # The reporting/gating split is the Windows job's and is deliberate: a GUI
+  # process on a runner with no interactive desktop fails for reasons that have
+  # nothing to do with the app, and a release blocked by a flaky window is worse
+  # than a release that says it is unverified.
+  smoke-linux:
+    name: Linux smoke test
+    needs: bundle
+    # Identical to the Windows gate above and for the identical reason:
+    # `needs.bundle.result` is the whole matrix, so `success()` here would mean
+    # "and macOS and Windows were fine too", and a Windows-only failure would
+    # then delete the only Linux evidence this project has. This job rebuilds
+    # from source and reads nothing `bundle` produced, so `needs` is ordering
+    # and nothing more.
+    #
+    # Neither smoke job is in `publish`'s `needs`, and that stays true: `publish`
+    # depends on `bundle` alone. A smoke test is evidence about a package, not a
+    # veto over shipping it, and half of each of these jobs is explicitly
+    # allowed to fail. If a smoke job should ever gate a release, it has to be
+    # the deterministic half that does it, which means splitting it into its own
+    # job first.
+    if: ${{ !cancelled() && needs.bundle.result != 'skipped' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # Third identical copy of the webview list, and see the bundle job's note
+      # on why these are duplicated rather than shared: they are easier to
+      # reason about that way, but they do have to be kept identical.
+      #
+      # xvfb and dbus are this job's own, and they are about the runner rather
+      # than about Marlin. A GTK application needs an X server to connect to and
+      # WebKitGTK talks to a session bus; a GitHub runner has neither. Note what
+      # is deliberately NOT installed here: libfuse2. Leaving it off is what
+      # makes the AppImage steps below a test of the stock-Ubuntu case rather
+      # than a test of a machine that has already been fixed.
+      - name: Install the Linux webview dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev xdg-utils
+          sudo apt-get install -y xvfb dbus-x11
+
+      # Rebuilt rather than downloaded from the release, exactly as the Windows
+      # job does, so a dry run can smoke test too and so this never depends on
+      # an upload having happened. ubuntu-22.04 for the glibc reason spelled out
+      # in the bundle matrix; a smoke test on a different floor to the shipped
+      # artefact is a smoke test of something else.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: x86_64-unknown-linux-gnu
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --target x86_64-unknown-linux-gnu --bundles deb,appimage
+
+      # One launcher, written once and used three times below, because "did it
+      # stay up" is the same question for the .deb, for the AppImage and for the
+      # AppImage's fallback, and three copies of it would drift.
+      #
+      # `timeout` rather than a background process and `kill -0`, and this is
+      # not a style preference. A background child that has exited stays a
+      # zombie until the shell waits on it, and `kill -0` on a zombie succeeds,
+      # so the obvious version of this reports a crashed application as healthy.
+      # Here the arithmetic is unambiguous: exit 124 means the timer had to kill
+      # it, which is the only outcome that means it was still alive. Every other
+      # code, including 0, means it exited on its own inside the window.
+      - name: Write the launch probe
+        run: |
+          cat > "$RUNNER_TEMP/stays-up.sh" <<'PROBE'
+          #!/usr/bin/env bash
+          # stays-up.sh <label> <command> [args...]
+          set -uo pipefail
+          label="$1"; shift
+          log="$(mktemp)"
+          timeout --kill-after=5 20 \
+            xvfb-run -a --server-args="-screen 0 1280x800x24" \
+            dbus-run-session -- "$@" >"$log" 2>&1
+          rc=$?
+          # xvfb-run's child is a grandchild of timeout, so it can outlive the
+          # signal that killed its parent. Named exactly, not `pkill -f`, which
+          # would also match the wrapper and anything else with the word in it.
+          pkill -x marlin 2>/dev/null || true
+          if [ "$rc" -eq 124 ]; then
+            echo "PASS  $label: still running when the 20s timer killed it"
+            echo "- Linux: $label started and was still running after 20s" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "FAIL  $label: exited on its own with $rc inside 20s. Its output:"
+          sed -n '1,60p' "$log" | sed 's/^/      /'
+          echo "- Linux: $label exited on its own with $rc inside 20s" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+          PROBE
+          chmod +x "$RUNNER_TEMP/stays-up.sh"
+
+      # The deterministic half, part one. This gates: if apt cannot install the
+      # .deb, or the AppImage's payload will not come out of it, the Linux
+      # downloads on the site are a lie and the job should be red.
+      #
+      # `apt-get install ./file.deb` rather than `dpkg -i`, because that is what
+      # a person does and because dpkg installs the file, leaves the
+      # dependencies unmet and exits telling you it worked.
+      - name: Install both packages the way a user would
+        run: |
+          set -euo pipefail
+          B=src-tauri/target/x86_64-unknown-linux-gnu/release/bundle
+          shopt -s nullglob
+          debs=("$B"/deb/*.deb)
+          apps=("$B"/appimage/*.AppImage)
+          if [ ${#debs[@]} -ne 1 ]; then echo "::error::expected exactly one .deb, found ${#debs[@]}"; exit 1; fi
+          if [ ${#apps[@]} -ne 1 ]; then echo "::error::expected exactly one .AppImage, found ${#apps[@]}"; exit 1; fi
+          DEB="$(realpath "${debs[0]}")"
+          APPIMG="$(realpath "${apps[0]}")"
+          echo "deb:      $DEB  ($(du -h "$DEB" | cut -f1))"
+          echo "appimage: $APPIMG  ($(du -h "$APPIMG" | cut -f1))"
+
+          echo "::group::what the .deb says it needs"
+          dpkg-deb -f "$DEB" Package Version Depends
+          echo "::endgroup::"
+
+          sudo apt-get install -y "$DEB"
+
+          if [ ! -x /usr/bin/marlin ]; then
+            echo "::error::the .deb installed but there is no executable /usr/bin/marlin"
+            dpkg -L marlin || true
+            exit 1
+          fi
+          echo "::group::what the .deb put on disk"
+          dpkg -L marlin
+          echo "::endgroup::"
+
+          # Found rather than assumed. The desktop entry is what puts Marlin in
+          # the application menu instead of in ~/Downloads, which is the whole
+          # reason the .deb is listed first, and its filename is the bundler's
+          # choice rather than ours.
+          desktop="$(ls /usr/share/applications/ | grep -i marlin || true)"
+          if [ -z "$desktop" ]; then
+            echo "::error::no .desktop entry, so an apt install leaves nothing in the application menu"
+            ls /usr/share/applications/
+            exit 1
+          fi
+          echo "desktop entry: $desktop"
+
+          if ldd /usr/bin/marlin | grep -q "not found"; then
+            echo "::error::/usr/bin/marlin has unresolved shared libraries after a clean apt install"
+            ldd /usr/bin/marlin | grep "not found"
+            exit 1
+          fi
+
+          # `--appimage-extract` is the AppImage runtime unpacking itself, and
+          # it needs no FUSE at all, which is precisely why it can be gated when
+          # the run below cannot. It proves the squashfs payload is intact and
+          # contains the binary we think it does.
+          chmod +x "$APPIMG"
+          work="$(mktemp -d)"
+          ( cd "$work" && "$APPIMG" --appimage-extract >/dev/null )
+          if [ ! -x "$work/squashfs-root/usr/bin/marlin" ]; then
+            echo "::error::the AppImage extracted but carries no usr/bin/marlin"
+            find "$work/squashfs-root" -maxdepth 3 | head -40
+            exit 1
+          fi
+          echo "appimage payload: $(du -sh "$work/squashfs-root" | cut -f1), binary present"
+
+          # Reported, never gated, and it decides how to read the two AppImage
+          # steps further down. If a future runner image starts shipping
+          # libfuse2, the plain run stops being the stock-Ubuntu case and starts
+          # being a test of a machine that has already been fixed.
+          if ldconfig -p | grep -q 'libfuse\.so\.2'; then
+            echo "NOTE: this runner HAS libfuse2, so the plain AppImage run below is not the stock-Ubuntu case"
+          else
+            echo "this runner has no libfuse2, which is the stock Ubuntu >=22.04 case"
+          fi
+
+          {
+            echo "- Linux: \`$(basename "$DEB")\` installed via apt, \`/usr/bin/marlin\` present with no missing libraries"
+            echo "- Linux: \`$(basename "$APPIMG")\` extracted and carries \`usr/bin/marlin\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "MARLIN_DEB=$DEB" >> "$GITHUB_ENV"
+          echo "MARLIN_APPIMAGE=$APPIMG" >> "$GITHUB_ENV"
+
+      # The deterministic half, part two, and the only step here that tests
+      # something this runner cannot. Every -dev package the build needed is
+      # installed on this machine, so "the .deb installed here" says nothing
+      # about whether its Depends line is complete. A bare ubuntu:22.04 has none
+      # of them, which is what a person's laptop looks like, so if apt can
+      # resolve and install it in there then the dependency metadata is real.
+      #
+      # No `--no-install-recommends`: a person typing `apt install ./marlin.deb`
+      # gets recommends, and a test stricter than the user is a test of
+      # something nobody does.
+      - name: Check the .deb installs on a machine that has never seen a build
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/marlin-pkg
+          cp "$MARLIN_DEB" /tmp/marlin-pkg/
+          docker run --rm -v /tmp/marlin-pkg:/pkg:ro ubuntu:22.04 bash -c '
+            set -eu
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y /pkg/*.deb
+            test -x /usr/bin/marlin
+            if ldd /usr/bin/marlin | grep "not found"; then
+              echo "::error::the .deb installs on a clean Ubuntu 22.04 but its dependencies do not cover it"
+              exit 1
+            fi
+            echo "clean ubuntu:22.04: apt resolved every dependency and /usr/bin/marlin has all of its libraries"
+          '
+          echo "- Linux: the \`.deb\` resolves and installs on a bare ubuntu:22.04 with no build tooling" >> "$GITHUB_STEP_SUMMARY"
+
+      # The reporting half begins here. None of the remaining steps gate, for
+      # the reason given at the top of this job.
+      #
+      # The `if:` on each of these is the step-level version of the same rule
+      # this job's own `if:` is about: do not let one artefact's problem delete
+      # the other artefact's evidence. A step that fails normally skips every
+      # step after it, so without this a broken Depends line in the .deb would
+      # take the whole AppImage half of the report down with it, on the one run
+      # where you most want to know whether the AppImage was fine. The condition
+      # is "did we get far enough to have the file", nothing more.
+      - name: Start the apt-installed binary, and see whether it stays up
+        continue-on-error: true
+        if: ${{ !cancelled() && env.MARLIN_DEB != '' }}
+        run: |
+          "$RUNNER_TEMP/stays-up.sh" "the .deb's /usr/bin/marlin" /usr/bin/marlin
+
+      # The claim under test is on two public pages: that a stock Ubuntu user
+      # running the AppImage plainly hits a libfuse.so.2 error. A FAIL here
+      # whose output mentions libfuse is that claim being CORRECT, not the
+      # AppImage being broken, which is why this cannot be allowed to gate. A
+      # PASS means either the runner has libfuse2 after all, or the AppImage is
+      # not type-2, and both would mean the wart is written down wrongly.
+      - name: Run the AppImage the way a stock Ubuntu user does
+        continue-on-error: true
+        if: ${{ !cancelled() && env.MARLIN_APPIMAGE != '' }}
+        run: |
+          "$RUNNER_TEMP/stays-up.sh" "the AppImage run plainly" "$MARLIN_APPIMAGE"
+
+      # And the documented way out of it. This is the sentence the README and
+      # the landing page both print, run verbatim.
+      - name: Run the AppImage with the documented --appimage-extract-and-run fallback
+        continue-on-error: true
+        if: ${{ !cancelled() && env.MARLIN_APPIMAGE != '' }}
+        run: |
+          "$RUNNER_TEMP/stays-up.sh" "the AppImage with --appimage-extract-and-run" "$MARLIN_APPIMAGE" --appimage-extract-and-run
+
+      # The AppImage's entire pitch is that it needs nothing, and this runner is
+      # the worst possible place to check that, because it has every library the
+      # build used. So the same two runs again inside a bare ubuntu:22.04, with
+      # only an X server and a session bus added, which is the least a desktop
+      # has and which no laptop is without.
+      #
+      # Reporting only, and honestly so: a container is not a desktop. It has no
+      # GPU, no compositor and no fonts to speak of, so a failure in here is
+      # information about how far the AppImage gets on a bare machine rather
+      # than a verdict on whether it works on somebody's Fedora.
+      - name: Run the AppImage on a machine that has never seen a build
+        continue-on-error: true
+        if: ${{ !cancelled() && env.MARLIN_APPIMAGE != '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/marlin-img
+          cp "$MARLIN_APPIMAGE" /tmp/marlin-img/marlin.AppImage
+          docker run --rm -v /tmp/marlin-img:/img:ro ubuntu:22.04 bash -c '
+            set -u
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y xvfb dbus-x11 libgl1 fonts-dejavu-core > /dev/null
+            cp /img/marlin.AppImage /tmp/m.AppImage
+            chmod +x /tmp/m.AppImage
+            echo "--- libfuse2 present in this container:"
+            ldconfig -p | grep -c "libfuse\.so\.2" || echo 0
+
+            echo "--- plainly, which is the stock-Ubuntu case:"
+            timeout --kill-after=5 20 xvfb-run -a dbus-run-session -- /tmp/m.AppImage > /tmp/plain.log 2>&1
+            echo "    exit $?"
+            sed -n "1,20p" /tmp/plain.log | sed "s/^/      /"
+
+            echo "--- with --appimage-extract-and-run, which is what we tell people to do:"
+            timeout --kill-after=5 20 xvfb-run -a dbus-run-session -- /tmp/m.AppImage --appimage-extract-and-run > /tmp/fallback.log 2>&1
+            rc=$?
+            echo "    exit $rc  (124 means it was still running at 20s, which is the pass)"
+            sed -n "1,40p" /tmp/fallback.log | sed "s/^/      /"
+            # 124 is the timer having to kill a living process, so it is the one
+            # code that means success here. Inverted deliberately.
+            [ $rc -eq 124 ] && exit 0 || exit 1
+          '
 
   # Undraft only once every platform has attached something. A half-populated
   # release that is already public is the one state the update feed must never
