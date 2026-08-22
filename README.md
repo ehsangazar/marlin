@@ -224,13 +224,25 @@ Downloading with `curl` rather than a browser skips the question entirely, for t
 On **Windows**, SmartScreen shows "Windows protected your PC". Choose **More info**, then
 **Run anyway**.
 
-On **Linux** there is none of this. The `.deb` and the AppImage just run.
+On **Linux** there is none of this. Nothing asks for a signature, and neither package triggers a
+warning of any kind.
 
-**One Linux wart worth knowing before you hit it.** The AppImage needs FUSE 2, and Ubuntu has not
-installed `libfuse2` by default since 22.04, so on a stock Ubuntu it fails with a `libfuse.so.2`
-error. Either `sudo apt install libfuse2`, or run it as
-`./Marlin_<version>_amd64.AppImage --appimage-extract-and-run`, or just take the `.deb`, which is
-why the `.deb` is listed first.
+**Take the `.deb` if apt is an option, and that is why it is listed first.** It declares its
+dependencies, so apt resolves them for you. The AppImage carries the webview but not the whole
+desktop, and CI has twice caught it wanting a library a bare system did not have,
+`libfontconfig.so.1` and then `libfribidi.so.0`. Both are ordinary parts of a GTK desktop and you
+almost certainly have them, but **nobody has yet run either package on a real Linux desktop**, so
+that is a claim we are not making. If the AppImage exits complaining about a missing shared library,
+the `.deb` is the answer.
+
+**What the AppImage does not need is FUSE 2**, whatever the usual AppImage advice says. Its runtime
+is `static-pie linked`, which `file` and `ldd` both confirm on every build, so it cannot be missing
+`libfuse.so.2` and `sudo apt install libfuse2` is not a step you need. `--appimage-extract-and-run`
+works if you would rather not mount anything at all.
+
+> An earlier version of this section said the AppImage needs FUSE 2 and fails on a stock Ubuntu.
+> **That was wrong.** It described classic AppImage behaviour that this AppImage does not have, and
+> it was written before the smoke test existed to check it. Corrected 23 Aug 2026.
 
 Building from source avoids the question everywhere, and is what we would do in your position.
 

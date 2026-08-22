@@ -611,11 +611,24 @@
 
   <p><strong>On Windows</strong>, SmartScreen shows &ldquo;Windows protected your PC&rdquo;. Choose
   <strong>More info</strong>, then <strong>Run anyway</strong>. <strong>On Linux</strong> there is
-  none of this; the <code>.deb</code> and the AppImage just run. One wart worth knowing before you
-  hit it: the AppImage needs FUSE 2, and Ubuntu has not shipped <code>libfuse2</code> by default
-  since 22.04, so on a stock Ubuntu it fails with a <code>libfuse.so.2</code> error. Install
-  <code>libfuse2</code>, or run it with <code>--appimage-extract-and-run</code>, or just take the
-  <code>.deb</code>.</p>
+  none of this: nothing asks for a signature and neither package raises a warning of any kind.</p>
+
+  <p><strong>Take the <code>.deb</code> if apt is an option</strong>, which is why it is listed
+  first. It declares its dependencies, so apt resolves them for you. The AppImage carries the webview
+  but not the whole desktop, and CI has twice caught it wanting a library a bare system did not have,
+  <code>libfontconfig.so.1</code> and then <code>libfribidi.so.0</code>. Both are ordinary parts of a
+  GTK desktop and you almost certainly have them, but <strong>nobody has yet run either package on a
+  real Linux desktop</strong>, so that is not a claim being made here. If the AppImage exits
+  complaining about a missing shared library, take the <code>.deb</code>.</p>
+
+  <p><strong>What the AppImage does not need is FUSE 2</strong>, whatever the usual AppImage advice
+  says. Its runtime is <code>static-pie linked</code>, which <code>file</code> and <code>ldd</code>
+  both confirm on every build, so it cannot be missing <code>libfuse.so.2</code> and installing
+  <code>libfuse2</code> is not a step you need.
+  <code>--appimage-extract-and-run</code> works if you would rather not mount anything at all.
+  <span style="color:var(--dim)">This paragraph said the opposite until 23 August 2026. It described
+  classic AppImage behaviour that this AppImage does not have, and it was written a few hours before
+  the smoke test existed to check it.</span></p>
 
   <p style="font-size:.86rem;color:var(--dim)"><strong>The Windows build is a pipeline, not yet a
   fact.</strong> The release workflow that produces those installers, and that installs the Windows
