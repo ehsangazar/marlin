@@ -848,7 +848,20 @@ jobs:
             # fuse3 and no libfuse2, which is stock. Do not add libfuse2 here:
             # installing it is the very thing the caveat tells users to do, so a
             # container that has it cannot answer whether they need to.
-            apt-get install -y xvfb dbus-x11 libgl1 libfontconfig1 fonts-dejavu-core fuse3 > /dev/null
+            #
+            # libgtk-3-0 rather than a list of individual libraries, and this is
+            # the line that decides what the download page is allowed to claim.
+            # The first two attempts guessed at the floor and were wrong twice,
+            # dying on libfontconfig.so.1 and then on libfribidi.so.0, which is
+            # a game of whack-a-mole with a public claim at the end of it. So
+            # draw the boundary where the artefact draws it instead: the site
+            # says the AppImage is 78MB "because it carries the webview with
+            # it". Then GTK is the host's job and webkit is the AppImage's, GTK
+            # is on every Linux desktop there is, and this container is that
+            # split made explicit. libwebkit2gtk is deliberately NOT installed:
+            # if the AppImage needs the host to have the webview, it has no
+            # reason to be 78MB and the page is wrong.
+            apt-get install -y xvfb dbus-x11 libgl1 libgtk-3-0 fonts-dejavu-core fuse3 > /dev/null
             cp /img/marlin.AppImage /tmp/m.AppImage
             chmod +x /tmp/m.AppImage
 
@@ -870,6 +883,18 @@ jobs:
             fb=$?
             echo "    exit $fb  (124 means it was still running at 20s, which is the pass)"
             sed -n "1,20p" /tmp/fallback.log | sed "s/^/      /"
+
+            # Self-diagnosing on the way down, because each round trip through
+            # CI is twenty minutes and the last two rounds each surfaced exactly
+            # one missing library. If it did not start, say what the payload
+            # wanted from the host and could not find, ALL of it, at once.
+            if [ $fb -ne 124 ]; then
+              echo "--- what the AppImage payload wants from the host and cannot find:"
+              ( cd /tmp && /tmp/m.AppImage --appimage-extract > /dev/null 2>&1 )
+              LD_LIBRARY_PATH=/tmp/squashfs-root/usr/lib \
+                ldd /tmp/squashfs-root/usr/bin/marlin 2>&1 | grep "not found" | sort -u | sed "s/^/      /" \
+                || echo "      nothing missing, so it failed for some other reason"
+            fi
 
             echo "VERDICT plain=$plain fallback=$fb"
             # Only the documented fallback has to work for the pages to be
