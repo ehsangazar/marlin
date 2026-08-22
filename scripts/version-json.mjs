@@ -39,6 +39,26 @@ const downloads = {
   "macos-aarch64": macos,
   "macos-x86_64": macos,
   "windows-x86_64": `${rel}/Marlin_${v}_x64-setup.exe`,
+  // The AppImage, not the .deb, even though the release ships both. This map
+  // holds one artefact per `platform_key()` and the AppImage is the one that
+  // runs without a package manager and without root, so it is the one to hand
+  // a stranger. Anybody who wants the .deb is on the release page already.
+  //
+  // What a Linux copy does with this, stated plainly because it is less than it
+  // looks: nothing yet. update.rs::installable() returns empty on anything that
+  // is not macOS before it ever reads `downloads`, since the in-place swap is
+  // hdiutil and ditto moving an .app and has no counterpart here. So a Linux
+  // build sees "a new version exists" and gets the release page, exactly as
+  // Windows does. The entry is here so the feed is an honest manifest of what
+  // the release contains, and so it is already right on the day an in-place
+  // Linux install exists.
+  //
+  // The real consequence is at the other end: publish.sh checks every URL in
+  // this map against the actual release, so from now on a release with no Linux
+  // artefact cannot publish a feed at all, for any platform. That is the same
+  // rule the workflow's publish job already applies and it is the one we want,
+  // but it does mean a red Linux leg now blocks the macOS and Windows feed too.
+  "linux-x86_64": `${rel}/Marlin_${v}_amd64.AppImage`,
 };
 
 writeFileSync(
