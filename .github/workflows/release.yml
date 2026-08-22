@@ -839,80 +839,126 @@ jobs:
           set -uo pipefail
           mkdir -p /tmp/marlin-img
           cp "$MARLIN_APPIMAGE" /tmp/marlin-img/marlin.AppImage
+
+          # The container script lives in a FILE now, written by a quoted
+          # heredoc and mounted in, rather than inline after `bash -c '...'`.
+          # That is not a tidy-up, it is the fix for run 32603423745, where this
+          # step ran for four seconds, printed nothing at all and reported
+          # success.
+          #
+          # The cause was a comment. Two of them said "the host's job" and "the
+          # AppImage's", and an apostrophe inside a single-quoted string closes
+          # it. Everything from there on stopped being script and became
+          # arguments, so the container ran `set -u`, `apt-get update -qq` and
+          # a few comments, then exited 0 with nothing to say. Four seconds is
+          # exactly how long `apt-get update -qq` takes.
+          #
+          # `bash -n` cannot catch this and did not: the mangled version is
+          # perfectly legal shell, it just is not the shell anyone wrote. A
+          # quoted heredoc has no such hole, because nothing inside `<<'STOCK'`
+          # is interpreted by anybody until bash reads the file.
+          cat > /tmp/marlin-img/stock-ubuntu.sh <<'STOCK'
+          #!/usr/bin/env bash
+          set -u
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+
+          # fuse3 and no libfuse2, which is stock. Do not add libfuse2 here:
+          # installing it is the very thing the caveat tells users to do, so a
+          # container that has it cannot answer whether they need to.
+          #
+          # libgtk-3-0 rather than a list of individual libraries, and this is
+          # the line that decides what the download page is allowed to claim.
+          # The first two attempts guessed at the floor and were wrong twice,
+          # dying on libfontconfig.so.1 and then on libfribidi.so.0, which is a
+          # game of whack-a-mole with a public claim at the end of it. So draw
+          # the boundary where the artefact draws it instead: the site says the
+          # AppImage is 78MB "because it carries the webview with it". If that
+          # is true then GTK belongs to the host and webkit belongs to the
+          # AppImage, GTK is on every Linux desktop there is, and this container
+          # is that split made explicit. libwebkit2gtk is deliberately NOT
+          # installed: if the AppImage needs the host to have the webview, it
+          # has no reason to be 78MB and the page needs rewriting.
+          apt-get install -y xvfb dbus-x11 libgl1 libgtk-3-0 fonts-dejavu-core fuse3 > /dev/null
+          cp /img/marlin.AppImage /tmp/m.AppImage
+          chmod +x /tmp/m.AppImage
+
+          echo "--- what this stock Ubuntu has for FUSE:"
+          ldconfig -p | grep -i fuse | sed "s/^/      /" || echo "      no libfuse in the linker cache"
+          command -v fusermount  || echo "      no fusermount (FUSE 2 helper), which is stock for >= 22.04"
+          command -v fusermount3 || echo "      no fusermount3 (FUSE 3 helper)"
+          ls -l /dev/fuse || echo "      no /dev/fuse"
+
+          echo "--- plainly, which is what a stock Ubuntu user actually types:"
+          timeout --kill-after=5 20 xvfb-run -a dbus-run-session -- /tmp/m.AppImage > /tmp/plain.log 2>&1
+          plain=$?
+          echo "    exit $plain  (124 means it was still running at 20s, which is the pass)"
+          sed -n "1,20p" /tmp/plain.log | sed "s/^/      /"
+
+          echo "--- with --appimage-extract-and-run, which is what we tell people to do:"
+          timeout --kill-after=5 20 xvfb-run -a dbus-run-session -- /tmp/m.AppImage --appimage-extract-and-run > /tmp/fallback.log 2>&1
+          fb=$?
+          echo "    exit $fb  (124 means it was still running at 20s, which is the pass)"
+          sed -n "1,20p" /tmp/fallback.log | sed "s/^/      /"
+
+          # Self-diagnosing on the way down, because each round trip through CI
+          # is twenty minutes and two rounds each surfaced exactly one missing
+          # library. If it did not start, say what the payload wanted from the
+          # host and could not find, all of it, at once.
+          if [ $fb -ne 124 ]; then
+            echo "--- what the AppImage payload wants from the host and cannot find:"
+            ( cd /tmp && /tmp/m.AppImage --appimage-extract > /dev/null 2>&1 )
+            LD_LIBRARY_PATH=/tmp/squashfs-root/usr/lib \
+              ldd /tmp/squashfs-root/usr/bin/marlin 2>&1 | grep "not found" | sort -u | sed "s/^/      /" \
+              || echo "      nothing missing, so it failed for some other reason"
+          fi
+
+          # This line is load-bearing beyond being readable: the step after this
+          # one refuses to pass unless it appears, which is what stops this
+          # probe ever silently not running again.
+          echo "VERDICT plain=$plain fallback=$fb"
+          STOCK
+
           docker run --rm \
             --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined \
-            -v /tmp/marlin-img:/img:ro ubuntu:22.04 bash -c '
-            set -u
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq
-            # fuse3 and no libfuse2, which is stock. Do not add libfuse2 here:
-            # installing it is the very thing the caveat tells users to do, so a
-            # container that has it cannot answer whether they need to.
-            #
-            # libgtk-3-0 rather than a list of individual libraries, and this is
-            # the line that decides what the download page is allowed to claim.
-            # The first two attempts guessed at the floor and were wrong twice,
-            # dying on libfontconfig.so.1 and then on libfribidi.so.0, which is
-            # a game of whack-a-mole with a public claim at the end of it. So
-            # draw the boundary where the artefact draws it instead: the site
-            # says the AppImage is 78MB "because it carries the webview with
-            # it". Then GTK is the host's job and webkit is the AppImage's, GTK
-            # is on every Linux desktop there is, and this container is that
-            # split made explicit. libwebkit2gtk is deliberately NOT installed:
-            # if the AppImage needs the host to have the webview, it has no
-            # reason to be 78MB and the page is wrong.
-            apt-get install -y xvfb dbus-x11 libgl1 libgtk-3-0 fonts-dejavu-core fuse3 > /dev/null
-            cp /img/marlin.AppImage /tmp/m.AppImage
-            chmod +x /tmp/m.AppImage
+            -v /tmp/marlin-img:/img:ro ubuntu:22.04 bash /img/stock-ubuntu.sh 2>&1 \
+            | tee /tmp/stock-ubuntu.out
+          rc=${PIPESTATUS[0]}
 
-            echo "--- what this stock Ubuntu has for FUSE:"
-            ldconfig -p | grep -i fuse | sed "s/^/      /" || echo "      no libfuse in the linker cache"
-            command -v fusermount  || echo "      no fusermount (FUSE 2 helper), which is stock for >= 22.04"
-            command -v fusermount3 || echo "      no fusermount3 (FUSE 3 helper)"
-            dpkg -S /usr/bin/fusermount /usr/bin/fusermount3 2>&1 | sed "s/^/      /"
-            ls -l /dev/fuse || echo "      no /dev/fuse"
-
-            echo "--- plainly, which is what a stock Ubuntu user actually types:"
-            timeout --kill-after=5 20 xvfb-run -a dbus-run-session -- /tmp/m.AppImage > /tmp/plain.log 2>&1
-            plain=$?
-            echo "    exit $plain  (124 means it was still running at 20s, which is the pass)"
-            sed -n "1,20p" /tmp/plain.log | sed "s/^/      /"
-
-            echo "--- with --appimage-extract-and-run, which is what we tell people to do:"
-            timeout --kill-after=5 20 xvfb-run -a dbus-run-session -- /tmp/m.AppImage --appimage-extract-and-run > /tmp/fallback.log 2>&1
-            fb=$?
-            echo "    exit $fb  (124 means it was still running at 20s, which is the pass)"
-            sed -n "1,20p" /tmp/fallback.log | sed "s/^/      /"
-
-            # Self-diagnosing on the way down, because each round trip through
-            # CI is twenty minutes and the last two rounds each surfaced exactly
-            # one missing library. If it did not start, say what the payload
-            # wanted from the host and could not find, ALL of it, at once.
-            if [ $fb -ne 124 ]; then
-              echo "--- what the AppImage payload wants from the host and cannot find:"
-              ( cd /tmp && /tmp/m.AppImage --appimage-extract > /dev/null 2>&1 )
-              LD_LIBRARY_PATH=/tmp/squashfs-root/usr/lib \
-                ldd /tmp/squashfs-root/usr/bin/marlin 2>&1 | grep "not found" | sort -u | sed "s/^/      /" \
-                || echo "      nothing missing, so it failed for some other reason"
-            fi
-
-            echo "VERDICT plain=$plain fallback=$fb"
-            # Only the documented fallback has to work for the pages to be
-            # honest. Whether the plain run works is the question the pages
-            # answer, and either answer is a legitimate result, so it is
-            # reported and not gated on.
-            [ $fb -eq 124 ] && exit 0 || exit 1
-          '
-          rc=$?
           # Written by hand rather than left to the step conclusion, because
           # `continue-on-error` makes a failed step report `success` in the API.
           # Anyone reading this job from the outside would be told it passed.
-          if [ $rc -eq 0 ]; then
-            echo "- Linux: the AppImage started with \`--appimage-extract-and-run\` on a stock ubuntu:22.04 with fuse3 and no libfuse2" >> "$GITHUB_STEP_SUMMARY"
+          verdict="$(grep '^VERDICT ' /tmp/stock-ubuntu.out || true)"
+          if [ -n "$verdict" ]; then
+            echo "- Linux: stock ubuntu:22.04, fuse3 and no libfuse2, GTK from the host: \`$verdict\` (124 is the pass)" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- Linux: the AppImage did NOT start on a stock ubuntu:22.04, read the Linux smoke log" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Linux: the stock-Ubuntu probe produced no verdict, read the Linux smoke log" >> "$GITHUB_STEP_SUMMARY"
           fi
           exit $rc
+
+      # Gating, and the one step in the reporting half that is. It asserts
+      # nothing about the AppImage; it asserts that the question was asked.
+      #
+      # Run 32603423745 is why it exists. The probe above no-opped, said
+      # nothing, and reported success, and a step that can silently not run is
+      # worse than one that fails: a failure teaches you something and that
+      # taught nothing while looking green. `continue-on-error` cannot express
+      # "this half may fail but must execute", so the assertion moves out here
+      # where a red X is a red job.
+      #
+      # Deliberately narrow. It does not care whether the AppImage worked, only
+      # that the probe got far enough to say so, so a genuine 127 still passes
+      # here and is still reported honestly above.
+      - name: Check the stock Ubuntu probe actually ran
+        if: ${{ !cancelled() && env.MARLIN_APPIMAGE != '' }}
+        run: |
+          set -euo pipefail
+          if [ ! -s /tmp/stock-ubuntu.out ] || ! grep -q '^VERDICT ' /tmp/stock-ubuntu.out; then
+            echo "::error::the stock-Ubuntu probe printed no VERDICT line, so it did not run to the end. Its output is the whole story:"
+            sed -n '1,60p' /tmp/stock-ubuntu.out 2>/dev/null || echo "  it produced nothing at all"
+            exit 1
+          fi
+          grep '^VERDICT ' /tmp/stock-ubuntu.out
 
   # Undraft only once every platform has attached something. A half-populated
   # release that is already public is the one state the update feed must never
