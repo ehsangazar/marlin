@@ -473,12 +473,17 @@ jobs:
   #              machine, and the build machine has every -dev package there is.
   #              So the interesting test is not on this runner, it is inside a
   #              bare ubuntu:22.04 container that has none of them.
-  #   AppImage   its failure mode is FUSE. Ubuntu stopped installing libfuse2 by
-  #              default at 22.04 and a type-2 AppImage needs it, so a stock
-  #              Ubuntu user gets a dlopen error about libfuse.so.2 instead of a
-  #              terminal. The README and the landing page both answer that with
-  #              `--appimage-extract-and-run`, and a documented workaround that
-  #              nobody has run is just another claim, so this job runs it.
+  #   AppImage   its failure mode is FUSE, and how badly is the open question
+  #              this job was built to settle. Ubuntu stopped installing
+  #              libfuse2 by default at 22.04, a classic type-2 AppImage needs
+  #              it, and the README and the landing page both tell users so and
+  #              hand them `--appimage-extract-and-run`. Run 32601226543 then
+  #              watched the AppImage mount and run on a machine with no
+  #              libfuse2 at all, which means one of those pages is wrong. So
+  #              the AppImage is run three ways here: plainly on the runner,
+  #              plainly on a container built to look like stock Ubuntu, and
+  #              with the documented fallback. A documented workaround nobody
+  #              has run is just another claim, and so is a documented problem.
   #
   # The reporting/gating split is the Windows job's and is deliberate: a GUI
   # process on a runner with no interactive desktop fails for reasons that have
@@ -573,7 +578,12 @@ jobs:
           # would also match the wrapper and anything else with the word in it.
           pkill -x marlin 2>/dev/null || true
           if [ "$rc" -eq 124 ]; then
-            echo "PASS  $label: still running when the 20s timer killed it"
+            echo "PASS  $label: still running when the 20s timer killed it. What it said:"
+            # Printed on the way past too, not only on failure. A pass here is
+            # "something was alive at 20 seconds", and the only way to tell that
+            # apart from a wrapper hanging is to see the application's own
+            # output, so it goes in the log whichever way the verdict went.
+            sed -n '1,25p' "$log" | sed 's/^/      /'
             echo "- Linux: $label started and was still running after 20s" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -661,6 +671,28 @@ jobs:
           else
             echo "this runner has no libfuse2, which is the stock Ubuntu >=22.04 case"
           fi
+          # The whole inventory, not just the one library, because the first run
+          # of this job (32601226543) reported no libfuse2 and then watched the
+          # AppImage mount and run anyway. Something in the sentence on the
+          # README and the landing page is wrong, and guessing which part is how
+          # a second wrong sentence gets written. So: print what is here.
+          echo "::group::what this machine has for FUSE"
+          ldconfig -p | grep -i fuse || echo "  no libfuse of any version in the linker cache"
+          command -v fusermount || echo "  no fusermount (that is the FUSE 2 helper)"
+          command -v fusermount3 || echo "  no fusermount3 (that is the FUSE 3 helper)"
+          ls -l /dev/fuse || echo "  no /dev/fuse"
+          dpkg -l 2>/dev/null | grep -iE '\bfuse' || echo "  no fuse package installed"
+          # And what the AppImage's own runtime demands, which is the decisive
+          # one and was the question the first run left open. An AppImage is an
+          # ELF executable with a squashfs stapled to the end of it, so the
+          # loader will say plainly whether libfuse.so.2 is a hard requirement
+          # of the runtime or whether the runtime carries its own.
+          echo "  what the AppImage runtime links against:"
+          ldd "$APPIMG" 2>&1 | sed 's/^/    /'
+          echo "  strings in the AppImage runtime that mention fuse:"
+          head -c 200000 "$APPIMG" > /tmp/appimage-runtime.bin
+          strings -n 6 /tmp/appimage-runtime.bin | grep -iE 'fuse' | sort -u | head -20 | sed 's/^/    /'
+          echo "::endgroup::"
 
           {
             echo "- Linux: \`$(basename "$DEB")\` installed via apt, \`/usr/bin/marlin\` present with no missing libraries"
@@ -702,6 +734,14 @@ jobs:
       # The reporting half begins here. None of the remaining steps gate, for
       # the reason given at the top of this job.
       #
+      # Read these from the log or from the job summary, NOT from the step's
+      # conclusion. `continue-on-error` does not merely stop a failed step
+      # failing the job, it reports that step's `conclusion` as `success` in the
+      # API and shows a tick in the UI; the real result is in `outcome`, which
+      # is not in the jobs payload at all. Run 32601226543 had one of these
+      # steps exit 1 and list as a success. Every probe below therefore writes
+      # its own verdict into the step summary, where it cannot be laundered.
+      #
       # The `if:` on each of these is the step-level version of the same rule
       # this job's own `if:` is about: do not let one artefact's problem delete
       # the other artefact's evidence. A step that fails normally skips every
@@ -718,9 +758,14 @@ jobs:
       # The claim under test is on two public pages: that a stock Ubuntu user
       # running the AppImage plainly hits a libfuse.so.2 error. A FAIL here
       # whose output mentions libfuse is that claim being CORRECT, not the
-      # AppImage being broken, which is why this cannot be allowed to gate. A
-      # PASS means either the runner has libfuse2 after all, or the AppImage is
-      # not type-2, and both would mean the wart is written down wrongly.
+      # AppImage being broken, which is why this cannot be allowed to gate.
+      #
+      # It passed on run 32601226543, on a runner whose linker cache had no
+      # libfuse.so.2 in it. Read that carefully before quoting it: this runner
+      # is a build machine, not a stock Ubuntu, and it can differ from one in
+      # ways this step cannot see. The container step at the bottom of this job
+      # is the controlled version of the same question, and the FUSE inventory
+      # printed above is what tells the two apart.
       - name: Run the AppImage the way a stock Ubuntu user does
         continue-on-error: true
         if: ${{ !cancelled() && env.MARLIN_APPIMAGE != '' }}
@@ -735,47 +780,94 @@ jobs:
         run: |
           "$RUNNER_TEMP/stays-up.sh" "the AppImage with --appimage-extract-and-run" "$MARLIN_APPIMAGE" --appimage-extract-and-run
 
-      # The AppImage's entire pitch is that it needs nothing, and this runner is
-      # the worst possible place to check that, because it has every library the
-      # build used. So the same two runs again inside a bare ubuntu:22.04, with
-      # only an X server and a session bus added, which is the least a desktop
-      # has and which no laptop is without.
+      # A stock Ubuntu, near enough, which is the environment the caveat on the
+      # README and the landing page is a claim about, and which this runner is
+      # not. Two things make it not: it has every -dev package the build needed,
+      # and the first run of this job (32601226543) showed the AppImage mounting
+      # and running on it with no libfuse2 present, which is the opposite of
+      # what both pages say happens. One of those pages is wrong and this step
+      # is how we find out which.
       #
-      # Reporting only, and honestly so: a container is not a desktop. It has no
-      # GPU, no compositor and no fonts to speak of, so a failure in here is
-      # information about how far the AppImage gets on a bare machine rather
-      # than a verdict on whether it works on somebody's Fedora.
-      - name: Run the AppImage on a machine that has never seen a build
+      # What is reproduced in here, and each piece is deliberate:
+      #
+      #   fuse3, no libfuse2   exactly what Ubuntu >= 22.04 ships. fuse3 gives
+      #                        you /usr/bin/fusermount3; the FUSE 2 helper
+      #                        `fusermount` and libfuse.so.2 are both absent,
+      #                        which is the whole substance of the caveat.
+      #   --device /dev/fuse   a container has no FUSE device unless you hand it
+      #                        one, and without it the AppImage fails for a
+      #                        container reason rather than an Ubuntu one. The
+      #                        first run failed exactly that way and it proved
+      #                        nothing. A desktop has /dev/fuse.
+      #   the X and font floor libfontconfig1 is here because the first run
+      #                        died on it: the AppImage bundles the webview but
+      #                        NOT fontconfig, so it needs the host to have it.
+      #                        Every Linux desktop does. A bare container does
+      #                        not, and that difference was reading as a broken
+      #                        AppImage when it is a broken test environment.
+      #
+      # SYS_ADMIN and the apparmor opt-out are what let fusermount mount inside
+      # a container at all. They are a property of running this in Docker, not
+      # something a user needs, and nothing about Marlin changes because of them.
+      #
+      # Reporting only, and it stays that way: this is still a container, with no
+      # GPU and no compositor, so a failure in here is evidence about how far the
+      # AppImage gets rather than a verdict on somebody's Fedora.
+      - name: Run the AppImage on a stock Ubuntu that has never seen a build
         continue-on-error: true
         if: ${{ !cancelled() && env.MARLIN_APPIMAGE != '' }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           mkdir -p /tmp/marlin-img
           cp "$MARLIN_APPIMAGE" /tmp/marlin-img/marlin.AppImage
-          docker run --rm -v /tmp/marlin-img:/img:ro ubuntu:22.04 bash -c '
+          docker run --rm \
+            --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined \
+            -v /tmp/marlin-img:/img:ro ubuntu:22.04 bash -c '
             set -u
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
-            apt-get install -y xvfb dbus-x11 libgl1 fonts-dejavu-core > /dev/null
+            # fuse3 and no libfuse2, which is stock. Do not add libfuse2 here:
+            # installing it is the very thing the caveat tells users to do, so a
+            # container that has it cannot answer whether they need to.
+            apt-get install -y xvfb dbus-x11 libgl1 libfontconfig1 fonts-dejavu-core fuse3 > /dev/null
             cp /img/marlin.AppImage /tmp/m.AppImage
             chmod +x /tmp/m.AppImage
-            echo "--- libfuse2 present in this container:"
-            ldconfig -p | grep -c "libfuse\.so\.2" || echo 0
 
-            echo "--- plainly, which is the stock-Ubuntu case:"
+            echo "--- what this stock Ubuntu has for FUSE:"
+            ldconfig -p | grep -i fuse | sed "s/^/      /" || echo "      no libfuse in the linker cache"
+            command -v fusermount  || echo "      no fusermount (FUSE 2 helper), which is stock for >= 22.04"
+            command -v fusermount3 || echo "      no fusermount3 (FUSE 3 helper)"
+            ls -l /dev/fuse || echo "      no /dev/fuse"
+
+            echo "--- plainly, which is what a stock Ubuntu user actually types:"
             timeout --kill-after=5 20 xvfb-run -a dbus-run-session -- /tmp/m.AppImage > /tmp/plain.log 2>&1
-            echo "    exit $?"
+            plain=$?
+            echo "    exit $plain  (124 means it was still running at 20s, which is the pass)"
             sed -n "1,20p" /tmp/plain.log | sed "s/^/      /"
 
             echo "--- with --appimage-extract-and-run, which is what we tell people to do:"
             timeout --kill-after=5 20 xvfb-run -a dbus-run-session -- /tmp/m.AppImage --appimage-extract-and-run > /tmp/fallback.log 2>&1
-            rc=$?
-            echo "    exit $rc  (124 means it was still running at 20s, which is the pass)"
-            sed -n "1,40p" /tmp/fallback.log | sed "s/^/      /"
-            # 124 is the timer having to kill a living process, so it is the one
-            # code that means success here. Inverted deliberately.
-            [ $rc -eq 124 ] && exit 0 || exit 1
+            fb=$?
+            echo "    exit $fb  (124 means it was still running at 20s, which is the pass)"
+            sed -n "1,20p" /tmp/fallback.log | sed "s/^/      /"
+
+            echo "VERDICT plain=$plain fallback=$fb"
+            # Only the documented fallback has to work for the pages to be
+            # honest. Whether the plain run works is the question the pages
+            # answer, and either answer is a legitimate result, so it is
+            # reported and not gated on.
+            [ $fb -eq 124 ] && exit 0 || exit 1
           '
+          rc=$?
+          # Written by hand rather than left to the step conclusion, because
+          # `continue-on-error` makes a failed step report `success` in the API.
+          # Anyone reading this job from the outside would be told it passed.
+          if [ $rc -eq 0 ]; then
+            echo "- Linux: the AppImage started with \`--appimage-extract-and-run\` on a stock ubuntu:22.04 with fuse3 and no libfuse2" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Linux: the AppImage did NOT start on a stock ubuntu:22.04, read the Linux smoke log" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $rc
 
   # Undraft only once every platform has attached something. A half-populated
   # release that is already public is the one state the update feed must never
