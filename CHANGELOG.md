@@ -52,6 +52,16 @@ version carries everything else.
   push. Reading what an agent changed and accepting it is one thought, and the app previously
   ended that thought one verb early.
 
+- **Linux packages.** A `.deb` for Debian and Ubuntu and an `.AppImage` for everything else, both
+  x64, built by CI alongside the macOS and Windows installers. Linux has compiled and been tested on
+  every push for a while; what it has never had is something to download. Built on Ubuntu 22.04
+  rather than on the newest available image, deliberately: an AppImage bundles the webview but not
+  glibc, so the machine that builds it sets the floor for every machine that runs it, and building
+  on 24.04 would have quietly excluded Ubuntu 22.04 LTS, Debian 12 and RHEL 9. **Nothing on Linux
+  asks for a signature, which makes it the only platform where an unsigned build costs nothing.**
+  The AppImage needs FUSE 2, which Ubuntu has not installed by default since 22.04, so on a stock
+  Ubuntu either install `libfuse2`, run it with `--appimage-extract-and-run`, or take the `.deb`.
+
 ### Changed
 - Source control is now the second tab of the sidebar rather than a section under the explorer,
   so changed files are listed in one place instead of two.
@@ -66,6 +76,24 @@ version carries everything else.
   already answering, and it cost a `git status` per sibling repository on every `cd`.
 
 ### Fixed
+- **macOS called Marlin damaged rather than unsigned, and told people to move it to the Trash.**
+  Every macOS build this project had shipped was malformed, not merely unsigned. With no signing
+  identity configured, Tauri's bundler skips signing entirely and never runs `codesign`, so what
+  shipped was the linker's automatic ad-hoc signature covering the executable and sealing none of
+  the bundle's resources. macOS reads that as structural damage, and the dialog it produces has no
+  Open Anyway in it: the buttons are Done and Move to Trash. **That is not a warning a user can
+  consent past, which is what every install instruction here assumed they could.** The app is now
+  ad-hoc signed properly, so the resources are sealed and `codesign --verify --strict` passes.
+  Gatekeeper still refuses it, which is correct and expected, but it now refuses it as software from
+  an unidentified developer, which System Settings can override. **Notarising it needs an Apple
+  Developer account this project does not have.** A release step now fails the build if the sealed
+  resources ever go missing again, because this was invisible for four months.
+- **The install instructions were wrong on every surface.** They said to right-click the app and
+  choose Open. macOS Sequoia removed that override in 2024, so for two major releases the documented
+  way out of the warning did nothing. The README and the site now carry Apple's current flow, System
+  Settings then Privacy & Security then Open Anyway, and say plainly that it is once: the flag that
+  triggers the warning is attached by whatever downloads a file, and Marlin fetching its own update
+  does not attach it.
 - **`⌘W` closed the window instead of the pane, and `⌘Q` quit without asking.** Setting no menu
   is not the same as having no menu: Tauri installs a default one that owns both accelerators,
   and AppKit matches a menu's key equivalent before the keystroke reaches the webview, so the
