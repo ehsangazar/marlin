@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Marlin — a terminal built for running coding agents</title>
+<title>Marlin, a terminal built for running coding agents</title>
 <meta name="description" content="A native, open-source terminal for running coding agents, with a git tree, diffs and syntax highlighting built in, so you read what an agent changed without leaving the terminal.">
 <meta property="og:title" content="Marlin">
 <meta property="og:description" content="The terminal where you read what your agents did. Native, open source, no account, no telemetry.">
@@ -538,10 +538,12 @@
     <li><b>The numbers are one laptop.</b> Nothing tracks them over time and nothing fails when they
       regress.</li>
     <li><b>Builds are unsigned</b>, so macOS will complain about an unidentified developer.</li>
-    <li><b>The cross-platform pipeline has never run.</b> Both workflows were written on 16 August
-      and no push or tag has been through either, so "tested on three platforms" is a file on a disk
-      until 0.1.2 proves otherwise. Nobody has sat in front of Marlin on Windows, and Linux is
-      compiled but never packaged.</li>
+    <li><b>No release has been through the cross-platform pipeline yet.</b> Both workflows now run
+      on GitHub, and the release build went green on 16 August for macOS universal and Windows x64,
+      including an installer that installed and stayed running on a Windows runner. What has never
+      happened is a <i>tag</i> going through it, so the only thing on the releases page is still the
+      one hand-built aarch64 image, until 0.1.2 proves otherwise. Nobody has sat in front of Marlin
+      on Windows, and Linux is compiled but never packaged.</li>
     <li><b>A restored session is a layout, not a session.</b> Tabs, splits and directories come back.
       Scrollback and what was running do not, and faking that would be worse than an empty prompt in
       the right place.</li>
@@ -672,7 +674,7 @@
     claude: "<span class='dv'>✻</span> <span class='dd'>Read</span> src/render/atlas.rs\n<span class='dv'>✻</span> <span class='dd'>Editing</span> 3 files\n\n<span class='dy'>▶ Waiting for your approval</span>\n  <span class='dd'>[y] approve   [n] reject</span>",
     build: SHELL + "cargo build --release\n<span class='dd'>   Compiling</span> marlin v0.1.0\n<span class='dg'>    Finished</span> in 41.2s\n\n" + SHELL + "<span class='dcur'></span>",
     test:  SHELL + "cargo test\n<span class='dr'>error</span>: cache entry outlived its ttl\n<span class='dd'>1 failed; 68 passed</span>\n\n" + SHELL + "<span class='dcur'></span>",
-    log:   SHELL + "tail -f render.log\n<span class='dd'>frame</span> 0.41ms <span class='dd'>damage 2 cells</span>\n<span class='dd'>frame skipped, no damage</span>",
+    log:   SHELL + "tail -f agent.log\n<span class='dd'>applied</span> 3 edits in src/cache.rs\n<span class='dd'>waiting for review</span>",
     shell: SHELL + "<span class='dcur'></span>"
   };
 
