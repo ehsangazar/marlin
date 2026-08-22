@@ -1,6 +1,9 @@
 # marlin
 
-**A terminal built for running coding agents.** Fast, customisable, opinionated.
+**The terminal where you read what your agents did.** Native, open source, no account.
+
+You do not run one command and watch it any more. You run several agents in several panes, and the
+real work is reading what they changed. That part happens here, without leaving the terminal.
 
 > **Status: v0.1, built 15 to 16 Aug 2026.** It works and it is used, but it is early. There
 > are now [numbers](#measuring) for the part Rust owns, printed by one reproducible command,
