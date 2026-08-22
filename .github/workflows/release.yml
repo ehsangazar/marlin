@@ -151,7 +151,10 @@ jobs:
           #
           # This has an expiry and it is dated, so nobody has to rediscover it:
           # GitHub begins deprecating the Ubuntu 22 images on 17 Sep 2026 and
-          # removes them by 17 Apr 2027. When this leg starts failing to find a
+          # removes them by 17 Apr 2027, announced in actions/runner-images
+          # #14254. The images table in that repository's README still shows no
+          # deprecation badge against them, so the announcement is the only
+          # place it is written down. When this leg starts failing to find a
           # runner, that is why. The fix is not `ubuntu-latest`, which just
           # moves the floor up again; it is building inside an older container
           # on a newer runner, so the glibc floor stops being a property of
@@ -188,7 +191,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
-            libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+            libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev xdg-utils
 
       - uses: dtolnay/rust-toolchain@stable
       - name: Add the build targets
@@ -233,6 +236,54 @@ jobs:
       # flag the other gained.
       - name: Build the installers
         run: pnpm tauri build --target ${{ matrix.target }} ${{ matrix.bundle_args }}
+
+      # Did the signature actually take? This exists because for every build
+      # this project has ever shipped the answer was no, and nothing said so.
+      #
+      # With no `signingIdentity` configured and no APPLE_CERTIFICATE in the
+      # environment, tauri-bundler's keychain lookup returns nothing, the whole
+      # signing branch is skipped and `codesign` is never run. What survives is
+      # the linker's automatic ad-hoc signature, which covers the Mach-O and
+      # seals no bundle resources. macOS does not read that as "unsigned". It
+      # reads it as corrupt, and shows "Marlin is damaged and can't be opened.
+      # You should move it to the Trash", which is not a warning a user can
+      # consciously accept, it is a dead end. v0.1.1 shipped exactly that:
+      # `flags=0x20002(adhoc,linker-signed)`, `Info.plist=not bound`,
+      # `Sealed Resources=none`, and spctl answering "code has no resources but
+      # signature indicates they must be present".
+      #
+      # The fix is one config key, `"signingIdentity": "-"` in tauri.conf.json,
+      # and no Apple account. It lives in the config rather than as
+      # APPLE_SIGNING_IDENTITY in this file so that a person building from
+      # source on a Mac gets the same bundle CI does; the README sends people to
+      # build from source, and a build that only comes out right inside CI is a
+      # trap laid for whoever takes that advice.
+      #
+      # This step is the guard, because the failure was invisible for four
+      # months. `--verify --strict` fails the build if the seal goes missing
+      # again. It deliberately does NOT assert the app is trusted: it is not,
+      # and cannot be without notarization. It asserts the bundle is well
+      # formed, which is a different thing and one we can actually have.
+      #
+      # If Marlin ever bundles a framework, note tauri-apps/tauri#8763: an
+      # ad-hoc signature on the app that disagrees with the one on the framework
+      # crashes it at launch. There is no framework today.
+      - name: Check the macOS signature is a real one
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          APP="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Marlin.app"
+          codesign -dv --verbose=2 "$APP" 2>&1 | tee sig.txt
+          codesign --verify --strict --verbose=2 "$APP"
+          if grep -q "Sealed Resources=none" sig.txt; then
+            echo "::error::linker-signed only, so macOS will call this damaged rather than unsigned"
+            exit 1
+          fi
+          # Reported, never gated. spctl rejects anything unnotarized and always
+          # will; what matters is WHICH rejection, so keep the sentence in the
+          # log rather than reducing it to a pass or a fail.
+          spctl -a -vvv -t exec "$APP" 2>&1 || true
+          echo "- macOS bundle is ad-hoc signed with its resources sealed, and is not notarized" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload them to the release
         shell: bash
