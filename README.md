@@ -209,7 +209,9 @@ also not nothing, so here is exactly what you will see and what to do about it.
 > not merely unsigned, it is **malformed**: the binary carries the linker's ad-hoc signature, which
 > seals no bundle resources, and macOS reads a signature promising resources it cannot find as
 > corruption. You therefore get **"Marlin is damaged and can't be opened. You should move it to the
-> Trash"**, and **that dialog has no Open Anyway and no consent path at all.**
+> Trash"**, whose two buttons are **Done** and **Move to Trash**. **The Open Anyway route described
+> below does not apply to it**: that exists for the unidentified-developer rejection, and this
+> bundle is refused one step earlier, before trust is the question.
 >
 > **Two remedies that are widely recommended for that dialog do not work here.** Measured rather
 > than assumed: `spctl -a -vvv -t exec` against the published 0.1.1 bundle, run 29 August 2026.

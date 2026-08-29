@@ -611,8 +611,10 @@
   binary carries the linker's ad-hoc signature, which seals no bundle resources, and macOS reads a
   signature that promises resources it cannot find as corruption. So you do not get the
   unidentified-developer warning. You get <b>&ldquo;Marlin is damaged and can&rsquo;t be opened. You
-  should move it to the Trash&rdquo;</b>, and <strong>that dialog has no Open Anyway and no consent
-  path of any kind.</strong></p>
+  should move it to the Trash&rdquo;</b>, whose two buttons are <b>Done</b> and <b>Move to Trash</b>.
+  <strong>The Open Anyway route described further down does not apply to it</strong>: that exists for
+  the unidentified-developer rejection, and this bundle is refused one step earlier, before trust is
+  the question.</p>
   <p style="margin:.8rem 0 0"><strong>Two things that are widely recommended for this dialog do not
   work here, and we measured that rather than assuming it.</strong> All three rows below are
   <code>spctl -a -vvv -t exec</code> against the published 0.1.1 bundle, run 29 August 2026. Exit 1
