@@ -525,8 +525,10 @@
 
   <p style="margin-top:1.3rem"><strong>One honest caveat.</strong> Builds are not yet signed with an
   Apple Developer ID, so macOS will warn you about an unidentified developer. The instructions below
-  say how to get past it. Building from source avoids the question entirely, and is the option we
-  would pick if we were you.</p>
+  say how to get past it. <strong>The 0.1.1 disk image on the releases page today is a worse case
+  than that</strong>, and needs one extra command before macOS will let you make that decision at
+  all; the download section explains it. Building from source avoids the question entirely, and is
+  the option we would pick if we were you.</p>
 </section>
 
 <section id="gaps" class="wrap">
@@ -541,8 +543,11 @@
       unidentified-developer warning once, on first launch. Until 22 August this was worse than
       that: nothing configured a signing identity, so the bundle went out with the linker's ad-hoc
       signature and no sealed resources, which macOS reads as <i>damaged</i> rather than as
-      untrusted. Fixed, and a release step now fails the build if it regresses. Notarising it needs
-      an Apple account this project does not have.</li>
+      untrusted. Fixed in the build on 22 August, and a release step now fails the build if it
+      regresses. <b>Not fixed in anything you can download</b>, because no tag has been through the
+      pipeline since: the published 0.1.1 image still answers <code>spctl</code> with exit 1,
+      re-checked 29 August. The download section says what to do about that. Notarising it needs an
+      Apple account this project does not have.</li>
     <li><b>No release has been through the cross-platform pipeline yet.</b> Both workflows now run
       on GitHub, and the release build has gone green on macOS universal, Windows x64 and, since
       22 August, Linux x64, including an installer that installed and stayed running on a Windows
@@ -598,16 +603,54 @@
   <strong>It happens once.</strong> Once you have allowed it, macOS saves the exception and Marlin
   opens by double-clicking from then on, and updates install in place without ever asking again.</p>
 
-  <p><strong>On macOS</strong> you get a dialog headed <b>&ldquo;Marlin&rdquo; Not Opened</b>, saying
-  Apple could not verify Marlin is free of malware. Its two buttons are <b>Done</b> and
-  <b>Move to Trash</b>, and Move to Trash is the highlighted one, so do not press it out of habit.
-  Open <b>System Settings</b>, then <b>Privacy &amp; Security</b>, scroll to <b>Security</b>, and
-  click <b>Open Anyway</b> next to Marlin. That button is only there for about an hour after you
-  tried to open it. Right-clicking and choosing Open used to do the same job and
+  <div style="border:1px solid var(--yel);border-left-width:3px;border-radius:6px;padding:1rem 1.1rem;margin-top:1.3rem;background:rgba(240,194,95,.05)">
+  <p style="margin:0"><strong style="color:var(--yel)">Read this before you download the 0.1.1 disk
+  image, because the paragraph after it does not apply to that file.</strong> The one artefact on the
+  releases page today, <code>Marlin_0.1.1_aarch64.dmg</code>, was built by hand on 16 August before
+  the signing bug below was found. It is not merely unsigned, it is <strong>malformed</strong>: the
+  binary carries the linker's ad-hoc signature, which seals no bundle resources, and macOS reads a
+  signature that promises resources it cannot find as corruption. So you do not get the
+  unidentified-developer warning. You get <b>&ldquo;Marlin is damaged and can&rsquo;t be opened. You
+  should move it to the Trash&rdquo;</b>, and <strong>that dialog has no Open Anyway and no consent
+  path of any kind.</strong></p>
+  <p style="margin:.8rem 0 0"><strong>Two things that are widely recommended for this dialog do not
+  work here, and we measured that rather than assuming it.</strong> All three rows below are
+  <code>spctl -a -vvv -t exec</code> against the published 0.1.1 bundle, run 29 August 2026. Exit 1
+  is a malformed bundle. Exit 3 is the ordinary unidentified developer, which is the one you can
+  click through.</p>
+  <div class="tblwrap" style="margin-top:.8rem"><table class="sectbl plain">
+    <tbody>
+      <tr><th scope="row">The disk image as downloaded</th><td><code>exit 1</code> &middot; <i>code has no resources but signature indicates they must be present</i></td></tr>
+      <tr><th scope="row">After <code>xattr -dr com.apple.quarantine</code></th><td><code>exit 1</code> &middot; unchanged. The quarantine flag was never the problem, so removing it changes nothing.</td></tr>
+      <tr><th scope="row">After <code>codesign --force --deep --sign - /Applications/Marlin.app</code></th><td><code>exit 3</code> &middot; <i>rejected</i>. Now it is the normal unidentified-developer case, and Open Anyway appears.</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin:.8rem 0 0"><strong>So if you want to run 0.1.1 today:</strong> drag it to
+  Applications, run <code>codesign --force --deep --sign - /Applications/Marlin.app</code>, then
+  follow the macOS paragraph below as normal. That re-seals the bundle on your own machine with the
+  same ad-hoc signature the build should have carried. It vouches for nothing and it is not a
+  substitute for notarisation; it only turns an unopenable file into one you can consciously decide
+  to trust. <strong>If you would rather not run that command on a stranger&rsquo;s binary, and that
+  is a reasonable position, build from source or wait for 0.1.2.</strong></p>
+  <p style="margin:.8rem 0 0"><strong>Fixed at source on 22 August, in the build rather than in this
+  advice.</strong> <code>&quot;signingIdentity&quot;: &quot;-&quot;</code> in
+  <code>tauri.conf.json</code> makes <code>tauri-bundler</code> actually run <code>codesign</code>
+  instead of skipping the step, and a release job now fails the build if <i>Sealed Resources</i> ever
+  goes missing again. <strong>Neither has reached a download yet</strong>, because no tag has been
+  through the pipeline since. 0.1.2 is the first build that will carry it.</p>
+  </div>
+
+  <p><strong>On macOS</strong>, from 0.1.2 onwards, you get a dialog headed <b>&ldquo;Marlin&rdquo;
+  Not Opened</b>, saying Apple could not verify Marlin is free of malware. Its two buttons are
+  <b>Done</b> and <b>Move to Trash</b>, and Move to Trash is the highlighted one, so do not press it
+  out of habit. Open <b>System Settings</b>, then <b>Privacy &amp; Security</b>, scroll to
+  <b>Security</b>, and click <b>Open Anyway</b> next to Marlin. That button is only there for about
+  an hour after you tried to open it. Right-clicking and choosing Open used to do the same job and
   <strong>stopped working in macOS Sequoia</strong>. If you would rather stay in a terminal,
   <code>xattr -dr com.apple.quarantine /Applications/Marlin.app</code> does it, and downloading with
   <code>curl</code> rather than a browser skips the question entirely, because the flag that
-  triggers it is attached by whatever downloaded the file.</p>
+  triggers it is attached by whatever downloaded the file. <strong>All of that is about a
+  well-formed unsigned bundle</strong>, which is what 0.1.2 will be and what 0.1.1 is not.</p>
 
   <p><strong>On Windows</strong>, SmartScreen shows &ldquo;Windows protected your PC&rdquo;. Choose
   <strong>More info</strong>, then <strong>Run anyway</strong>. <strong>On Linux</strong> there is

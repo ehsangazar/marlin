@@ -132,9 +132,12 @@ because a stale gap list flatters you just as much as no gap list at all.
   warning and Windows shows SmartScreen, both once, on first launch. Until 22 Aug 2026 this was
   worse than that sentence admits: nothing configured a signing identity, so the bundle shipped with
   the linker's ad-hoc signature and no sealed resources, and macOS reads that as *damaged* rather
-  than as untrusted. It is now signed ad-hoc properly, and a release step fails the build if the
-  resources stop being sealed. **Notarisation is still missing and needs an Apple account this
-  project does not have.** Building from source avoids the question.
+  than as untrusted. **The build is fixed and no download is**: `"signingIdentity": "-"` landed
+  22 Aug and a release step fails the build if the resources stop being sealed, but no tag has been
+  through the pipeline since, so the published 0.1.1 image still answers `spctl` with exit 1,
+  re-checked 29 Aug 2026. See the warning under [Installing](#installing).
+  **Notarisation is still missing and needs an Apple account this project does not have.** Building
+  from source avoids the question.
 - **No tag has been through the release pipeline.** Both workflows were written on 16 Aug 2026;
   `ci.yml` has run on every push since and `release.yml` has gone green as a dry run on macOS,
   Windows and Linux, but **0.1.2 will be the first actual release through it**. Nobody has *sat in
@@ -200,11 +203,42 @@ signing certificate, so macOS and Windows both stop you the first time. That war
 nobody has paid anyone to vouch for this build. It is not a judgement about the contents, and it is
 also not nothing, so here is exactly what you will see and what to do about it.
 
+> [!WARNING]
+> **The 0.1.1 disk image on the releases page is a different and worse case than the one described
+> below, so read this first.** It was built by hand on 16 August, before the bug was found. It is
+> not merely unsigned, it is **malformed**: the binary carries the linker's ad-hoc signature, which
+> seals no bundle resources, and macOS reads a signature promising resources it cannot find as
+> corruption. You therefore get **"Marlin is damaged and can't be opened. You should move it to the
+> Trash"**, and **that dialog has no Open Anyway and no consent path at all.**
+>
+> **Two remedies that are widely recommended for that dialog do not work here.** Measured rather
+> than assumed: `spctl -a -vvv -t exec` against the published 0.1.1 bundle, run 29 August 2026.
+> Exit 1 is a malformed bundle; exit 3 is the ordinary unidentified developer you can click through.
+>
+> | State of the bundle | `spctl` |
+> |---|---|
+> | As downloaded | **exit 1**, *code has no resources but signature indicates they must be present* |
+> | After `xattr -dr com.apple.quarantine` | **exit 1**, unchanged. The quarantine flag was never the problem |
+> | After `codesign --force --deep --sign - /Applications/Marlin.app` | **exit 3**, *rejected*. The ordinary case, and Open Anyway appears |
+>
+> **To run 0.1.1 today:** drag it to Applications, run
+> `codesign --force --deep --sign - /Applications/Marlin.app`, then follow the macOS steps below as
+> normal. That re-seals the bundle on your own machine with the ad-hoc signature the build should
+> have carried. It vouches for nothing and does not substitute for notarisation; it turns an
+> unopenable file into one you can consciously decide to trust. If you would rather not run that on
+> a stranger's binary, which is a reasonable position, build from source or wait for 0.1.2.
+>
+> **Fixed at source on 22 August**, in the build rather than in this advice: `"signingIdentity": "-"`
+> in `tauri.conf.json` makes `tauri-bundler` actually run `codesign` instead of skipping the step,
+> and a release job now fails the build if *Sealed Resources* goes missing again. **Neither has
+> reached a download**, because no tag has been through the pipeline since. 0.1.2 is the first build
+> that will carry it.
+
 **It happens once.** Once you have allowed it, macOS saves the exception and Marlin opens by
 double-clicking from then on. Updates install in place and never ask again, because the warning is
 attached by whatever *downloads* a file and Marlin fetching its own disk image does not attach it.
 
-On **macOS** you get a dialog headed **"Marlin" Not Opened**, saying Apple could not verify Marlin
+On **macOS**, from 0.1.2 onwards, you get a dialog headed **"Marlin" Not Opened**, saying Apple could not verify Marlin
 is free of malware. Its two buttons are **Done** and **Move to Trash**, and Move to Trash is the
 highlighted one, so do not press it out of habit. Open **System Settings**, then
 **Privacy & Security**, scroll to **Security**, and click **Open Anyway** next to Marlin. That
