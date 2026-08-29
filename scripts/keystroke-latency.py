@@ -552,6 +552,12 @@ def main():
     ap.add_argument("--offset-ms", type=float,
                     help="supply a known audio-to-video offset directly, instead "
                          "of measuring one with --slate-frame")
+    ap.add_argument("--threshold", type=float, metavar="MS",
+                    help="gate threshold on the delta, in ms. Given this, the "
+                         "run prints an explicit PASS, FAIL or NOT RESOLVED "
+                         "against the UPPER end of the 95%% interval, which is "
+                         "the rule fixed on 29 Aug 2026 before any capture. "
+                         "The point estimate does not decide it.")
     ap.add_argument("--cfr", action="store_true",
                     help="trust the nominal frame rate instead of reading timestamps")
     ap.add_argument("--csv", help="write the per-trial table here")
@@ -805,6 +811,32 @@ def main():
     # falls inside the display refresh period, which at 60 Hz is a uniform
     # 16.7 ms wide and about 4.8 ms of standard deviation. Several times that
     # is not a slow terminal, it is a broken measurement.
+    # A slate frame identified wrongly moves every corrected absolute by the
+    # same amount and is invisible in the delta, which cancels it. The only
+    # thing that catches it is knowing roughly what keystroke-to-pixel is:
+    # tens of milliseconds, never negative, and never a fifth of a second on a
+    # terminal anybody would use. So the corrected column, and only the
+    # corrected column, gets a plausibility check. The uncorrected absolutes
+    # carry the unknown offset by definition and are not checkable this way,
+    # which is why they may not be quoted at all.
+    if corrected:
+        for lab, st in stats.items():
+            c = st.get("p50_corrected")
+            if c is None or not math.isfinite(c):
+                continue
+            if c < 1.0 or c > 150.0:
+                alarms.append(
+                    "%s has an offset-corrected p50 of %.1f ms, which is not a "
+                    "latency any terminal has. Keystroke to pixel is tens of "
+                    "milliseconds and cannot be negative. The offset of %+.2f ms "
+                    "is wrong, which means the slate frame is wrong, and every "
+                    "corrected absolute and the ratio are wrong with it. The "
+                    "delta is unaffected: it cancels the offset whatever the "
+                    "slate said. Re-read the slate frame three times, take the "
+                    "median, and if they disagree by more than one frame make a "
+                    "new slate and recapture."
+                    % (lab, c, offset_ms))
+
     for lab, st in stats.items():
         if math.isfinite(st["sd"]) and st["sd"] > 20.0:
             alarms.append(
@@ -824,12 +856,15 @@ def main():
         d = stats[sub]["p50"] - stats[base]["p50"]
         se = math.sqrt(median_se(stats[sub]["sd"], stats[sub]["n"]) ** 2
                        + median_se(stats[base]["sd"], stats[base]["n"]) ** 2)
+        lo, hi = d - 1.96 * se, d + 1.96 * se
         result["delta_ms"] = d
         result["delta_se_ms"] = se
+        result["delta_ci95_ms"] = [lo, hi]
         say("")
         say("THE FIGURE THE GATE TURNS ON")
         say("")
         say("  %s p50 minus %s p50 = %+.2f ms   (se about %.2f ms)" % (sub, base, d, se))
+        say("  95%% interval on that delta: %+.2f to %+.2f ms" % (lo, hi))
         say("")
         say("  The offset is the same in both terms, so it cancels in that")
         say("  subtraction exactly. The delta is clean whether or not the offset")
@@ -855,6 +890,40 @@ def main():
             say("  The raw quotient here is %.3f and should not be quoted." % raw)
             say("  To get a real one, measure the offset: see --slate-frame in")
             say("  --protocol. It costs one number, read off the video once.")
+
+        # The verdict is computed here, by the tool, against a threshold given
+        # on the command line, because a rule that is applied by hand after the
+        # numbers are visible is not a pre-committed rule. It turns on the
+        # UPPER end of the interval and not on the point estimate: fixed
+        # 29 Aug 2026, five weeks before the capture, in
+        # "Decision 2026-08-29 Pre-Capture Rules". The asymmetry is the whole
+        # argument. A false pass puts a speed claim on a public surface that
+        # the measurement does not support. A false fail costs a sentence.
+        if args.threshold is not None:
+            t = args.threshold
+            verdict = ("PASS" if hi <= t else
+                       "FAIL" if lo > t else
+                       "NOT RESOLVED")
+            result["threshold_ms"] = t
+            result["verdict"] = verdict
+            say("")
+            say("  VERDICT against a %.1f ms threshold: %s" % (t, verdict))
+            if verdict == "PASS":
+                say("  The whole interval sits at or below the threshold, so the")
+                say("  delta is within it and not merely consistent with being")
+                say("  within it.")
+            elif verdict == "FAIL":
+                say("  The whole interval sits above the threshold. This is a")
+                say("  real result, not a failed measurement, and it is the one")
+                say("  the write-up should report.")
+            else:
+                say("  The interval spans the threshold, so this session cannot")
+                say("  decide it either way. Under the 29 Aug rule ONE pooled")
+                say("  recapture to n=60 is allowed, declared before the second")
+                say("  session is looked at, and its result is final whichever")
+                say("  way it falls. There is no third session.")
+                say("  NOT RESOLVED is an outcome. It is not a reason to quote")
+                say("  the point estimate as though it had passed.")
     else:
         say("")
         say("No delta: --subject %s and --baseline %s were not both found in the "

@@ -175,10 +175,30 @@ anecdote.** The target is **30**, which puts the 95% interval on the delta at
 about 5 ms against a threshold of 30 ms, so the gate only becomes ambiguous if
 the delta lands between roughly 25 and 35 ms.
 
-**The pre-committed rule for that case, written now rather than on the day: if
-the delta lands between 25 and 35 ms, capture a second full session and pool
-it to n=60.** Deciding that after seeing the number is how a threshold stops
-meaning anything.
+**The pre-committed rule, settled Sat 29 Aug 2026, four weeks before the
+capture: the gate turns on the UPPER end of the 95% interval, not on the point
+estimate.** PASS means the whole interval sits at or below 30 ms. FAIL means
+the whole interval sits above it. Anything else is **NOT RESOLVED**, which is
+an outcome and not an invitation to quote the median as though it had passed.
+
+**Pass `--threshold 30` and the tool prints that verdict itself.** A rule
+applied by hand after the numbers are on screen is not a pre-committed rule.
+
+**Why the upper bound and not the median.** The two errors do not cost the same.
+A false PASS puts a speed claim on a public surface that the measurement does
+not support, which is the exact thing the positioning was rebuilt on 16 Aug to
+stop doing. A false FAIL costs one sentence in the write-up, and the write-up
+ships either way. So the rule makes Marlin prove it is inside 30 ms rather than
+merely fail to prove it is outside.
+
+**This replaces the earlier proposal to pool to n=60 whenever the delta landed
+between 25 and 35 ms.** That proposal was right about the problem and wrong
+about the remedy: n=60 only narrows the interval to about plus or minus 3.6 ms,
+so a delta near 30 is still unresolved and the rule never terminates.
+**One pooled recapture to n=60 is still allowed on a NOT RESOLVED, declared
+before the second session is looked at, and its result is final whichever way
+it falls. There is no third session.** Full reasoning in
+`Decision 2026-08-29 Pre-Capture Rules` in the vault.
 
 ---
 
@@ -307,6 +327,18 @@ pixel change.
 number. In QuickTime, hold the right arrow to step frame by frame; frame number
 is time in seconds times 240.
 
+**Read it three times, independently, and take the median.** This is the one
+number in the whole protocol still read off a video by a person, so it has the
+failure mode the rest of the method was built to remove, concentrated at n=1.
+**If the three reads disagree by more than one frame the slate is unusable:
+make another one and recapture.** One frame out at 240 fps moves the offset by
+4.17 ms, which is about 14% on the ratio.
+
+**A wrong slate cannot flip the gate**, because the offset cancels in the delta
+whatever the slate said. It corrupts the corrected absolutes and the ratio and
+nothing else. The tool also refuses a corrected p50 below 1 ms or above 150 ms,
+which is not a fast or slow terminal but a misread slate.
+
 **Run it.**
 
 ```
@@ -315,6 +347,7 @@ scripts/keystroke-latency.py capture.mov \
   --order marlin,ghostty,alacritty,ghostty,alacritty,marlin,alacritty,marlin,ghostty \
   --slate-frame 412 --slate-before 6 \
   --subject marlin --baseline ghostty \
+  --threshold 30 \
   --csv trials.csv --json result.json
 ```
 
